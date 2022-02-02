@@ -62,7 +62,6 @@ class AccountsWindow(Gtk.Dialog):
                             transient_for=transient_for)
         self.init_template()
 
-        self.accounts = []
         self.pixbufs = {}
         self.treeiters = {}
         self.current = AccountsView.LIST
@@ -72,7 +71,7 @@ class AccountsWindow(Gtk.Dialog):
         self.adding_allow = False
         self.adding_extra = {}
 
-        self._remove_border()
+        #self._remove_border()
         self._add_separators()
         self._refresh_remember()
         self._refresh_pixbufs()
@@ -108,10 +107,8 @@ class AccountsWindow(Gtk.Dialog):
             self.pixbufs[libname] = GdkPixbuf.Pixbuf.new_from_file(lib[1])
 
     def _refresh_list(self):
-        for account in self.accounts:
-            account.destroy()
-
-        self.accounts = []
+        while self.accounts_listbox.get_row_at_index(0) is not None:
+            self.accounts_listbox.remove(self.accounts_listbox.get_row_at_index(0))
 
         for k, account in self.manager.get_accounts():
             libname = account['api']
@@ -137,10 +134,9 @@ class AccountsWindow(Gtk.Dialog):
                     'active': False
                 })
 
-            self.accounts_listbox.add(account)
-            self.accounts.append(account)
+            self.accounts_listbox.append(account)
 
-        if not self.accounts:
+        if self.accounts_listbox.get_row_at_index(0) is None:
             self.accounts_frame.hide()
         else:
             self.accounts_frame.show()
@@ -182,7 +178,7 @@ class AccountsWindow(Gtk.Dialog):
     def _on_btn_delete_clicked(self, btn):
         row = self.accounts_listbox.get_selected_row()
         self.manager.delete_account(row.get_account_id())
-        row.destroy()
+        self._refresh_list()
 
     @Gtk.Template.Callback()
     def _on_btn_add_clicked(self, btn):
