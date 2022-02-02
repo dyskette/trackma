@@ -1,0 +1,62 @@
+{
+    "app-id" : "com.github.z411.TrackmaGtk.Devel",
+    "runtime" : "org.gnome.Platform",
+    "runtime-version" : "41",
+    "sdk" : "org.gnome.Sdk",
+    "command" : "trackma-gtk",
+    "finish-args" : [
+        "--share=network",
+        "--share=ipc",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--socket=wayland"
+    ],
+    "cleanup" : [
+        "/include",
+        "/lib/pkgconfig",
+        "/man",
+        "/share/doc",
+        "/share/gtk-doc",
+        "/share/man",
+        "/share/pkgconfig",
+        "*.la",
+        "*.a"
+    ],
+    "modules" : [
+        {
+            "name": "python-pillow",
+            "buildsystem": "simple",
+            "ensure-writable" : [
+                "/lib/python*/site-packages/easy-install.pth"
+            ],
+            "build-commands": [
+                "python3 setup.py build",
+                "python3 setup.py install --prefix /app"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://files.pythonhosted.org/packages/source/P/Pillow/Pillow-8.4.0.tar.gz",
+                    "sha256": "b8e2f83c56e141920c39464b852de3719dfbfb6e3c99a2d8da0edf4fb33176ed"
+                }
+            ]
+        },
+        {
+            "name" : "trackma",
+            "buildsystem" : "simple",
+            "ensure-writable" : [
+                "/lib/python*/site-packages/easy-install.pth"
+            ],
+            "build-commands" : [
+            	"python3 setup.py build",
+            	"python3 setup.py install --prefix /app"
+            ],
+            "sources" : [
+                {
+                    "type" : "git",
+                    "url" : "."
+                }
+            ]
+        }
+    ]
+}
