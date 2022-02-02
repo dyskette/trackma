@@ -71,9 +71,9 @@ class ImageThread(threading.Thread):
         self._stop_request.set()
 
 
-class ImageBox(Gtk.HBox):
+class ImageBox(Gtk.Box):
     def __init__(self, width, height):
-        Gtk.HBox.__init__(self)
+        Gtk.Box.__init__(self)
 
         self._width = width
         self._height = height
@@ -87,10 +87,10 @@ class ImageBox(Gtk.HBox):
         self._image_thread = None
 
         if imaging_available:
-            self.pack_start(self._label_holder, False, False, 0)
-            self.pack_start(self._image, False, False, 0)
+            self.append(self._label_holder)
+            self.append(self._image)
         else:
-            self.pack_start(self._label_holder, False, False, 0)
+            self.append(self._label_holder)
 
         self.reset()
 
