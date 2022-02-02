@@ -19,15 +19,14 @@ import os
 import subprocess
 import threading
 
-from gi.repository import GLib, Gio, Gtk, Gdk
-from trackma.ui.gtk import gtk_dir
+from gi.repository import GLib, Gio, Gtk, Gdk, Adw
+from trackma.ui.gtk import gtk_dir, TrackmaShowAction
 from trackma.ui.gtk.accountswindow import AccountsWindow
 from trackma.ui.gtk.mainview import MainView
 from trackma.ui.gtk.searchwindow import SearchWindow
 from trackma.ui.gtk.settingswindow import SettingsWindow
 from trackma.ui.gtk.showeventtype import ShowEventType
 from trackma.ui.gtk.showinfowindow import ShowInfoWindow
-from trackma.ui.gtk.statusicon import TrackmaStatusIcon
 from trackma.engine import Engine
 from trackma.accounts import AccountManager
 from trackma import messenger
@@ -35,22 +34,22 @@ from trackma import utils
 
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/window.ui'))
-class TrackmaWindow(Gtk.ApplicationWindow):
+class TrackmaWindow(Adw.ApplicationWindow):
     __gtype_name__ = 'TrackmaWindow'
 
     btn_appmenu = Gtk.Template.Child()
     btn_mediatype = Gtk.Template.Child()
     header_bar = Gtk.Template.Child()
+    main_container = Gtk.Template.Child()
 
     def __init__(self, app, debug=False):
-        Gtk.ApplicationWindow.__init__(self, application=app)
+        Adw.ApplicationWindow.__init__(self, application=app)
         self.init_template()
 
         self._debug = debug
         self._configfile = utils.to_config_path('ui-Gtk.json')
         self._config = utils.parse_config(self._configfile, utils.gtk_defaults)
 
-        self.statusicon = None
         self._main_view = None
         self._modals = []
 
@@ -71,49 +70,34 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self._show_accounts(switch=False)
 
     def _init_widgets(self):
-        Gtk.Window.set_default_icon_from_file(utils.DATADIR + '/icon.png')
-        self.set_position(Gtk.WindowPosition.CENTER)
+        # Gtk.Window.set_default_icon_from_file(utils.DATADIR + '/icon.png')
+        # self.set_position(Gtk.WindowPosition.CENTER)
         self.set_title('Trackma')
+        self.get_style_context().add_class('devel')
 
         if self._config['remember_geometry']:
-            self.resize(self._config['last_width'],
-                        self._config['last_height'])
+            self.set_default_size(self._config['last_width'], self._config['last_height'])
 
         if not self._main_view:
-            self._main_view = MainView(self._config)
+            self._main_view = MainView(self, self._config)
             self._main_view.connect('error', self._on_main_view_error)
             self._main_view.connect(
                 'success', lambda x: self._set_buttons_sensitive(True))
             self._main_view.connect(
                 'error-fatal', self._on_main_view_error_fatal)
             self._main_view.connect('show-action', self._on_show_action)
-            self.add(self._main_view)
+            self.main_container.append(self._main_view)
 
-        self.connect('delete_event', self._on_delete_event)
+        self.connect('close-request', self._on_delete_event)
 
         builder = Gtk.Builder.new_from_file(
             os.path.join(gtk_dir, 'data/shortcuts.ui'))
         help_overlay = builder.get_object('shortcuts-window')
         self.set_help_overlay(help_overlay)
 
-        # Status icon
-        if TrackmaStatusIcon.is_tray_available():
-            self.statusicon = TrackmaStatusIcon()
-            self.statusicon.connect('hide-clicked', self._on_tray_hide_clicked)
-            self.statusicon.connect(
-                'about-clicked', self._on_tray_about_clicked)
-            self.statusicon.connect('quit-clicked', self._on_tray_quit_clicked)
-
-            if self._config['show_tray']:
-                self.statusicon.set_visible(True)
-            else:
-                self.statusicon.set_visible(False)
-
-        # Don't show the main window if start in tray option is set
-        if self.statusicon and self._config['show_tray'] and self._config['start_in_tray']:
-            self.hidden = True
-        else:
-            self.present()
+        self._about = self._create_about_dialog()
+        self._about.connect('close-request', lambda dialog: self._about.hide())
+        self.present()
 
     def _on_tray_hide_clicked(self, status_icon):
         self._destroy_modals()
@@ -143,12 +127,8 @@ class TrackmaWindow(Gtk.ApplicationWindow):
     def _on_tray_quit_clicked(self, status_icon):
         self._quit()
 
-    def _on_delete_event(self, widget, event, data=None):
-        if self.statusicon and self.statusicon.get_visible() and self._config['close_to_tray']:
-            self.hidden = True
-            self.hide()
-        else:
-            self._quit()
+    def _on_delete_event(self, widget):
+        self._quit()
         return True
 
     def _create_engine(self, account):
@@ -170,26 +150,71 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self.get_application().set_menubar(builder.get_object('menu-bar'))
             self.btn_appmenu.set_property('visible', False)
 
-        def add_action(name, callback):
-            action = Gio.SimpleAction.new(name, None)
+        def new_action(name, callback, parameterType=None):
+            action = Gio.SimpleAction.new(name, parameterType)
             action.connect('activate', callback)
-            self.add_action(action)
+            return action
 
-        add_action('search', self._on_search)
-        add_action('syncronize', self._on_synchronize)
-        add_action('upload', self._on_upload)
-        add_action('download', self._on_download)
-        add_action('scanfiles', self._on_scanfiles)
-        add_action('accounts', self._on_accounts)
-        add_action('preferences', self._on_preferences)
-        add_action('about', self._on_about)
+        self.add_action(new_action('search', self._on_search))
+        self.add_action(new_action('syncronize', self._on_synchronize))
+        self.add_action(new_action('upload', self._on_upload))
+        self.add_action(new_action('download', self._on_download))
+        self.add_action(new_action('scanfiles', self._on_scanfiles))
+        self.add_action(new_action('accounts', self._on_accounts))
+        self.add_action(new_action('preferences', self._on_preferences))
+        self.add_action(new_action('about', lambda a, b: self._about.present()))
 
-        add_action('play_next', self._on_action_play_next)
-        add_action('play_random', self._on_action_play_random)
-        add_action('episode_add', self._on_action_episode_add)
-        add_action('episode_remove', self._on_action_episode_remove)
-        add_action('delete', self._on_action_delete)
-        add_action('copy', self._on_action_copy)
+        show_actions = Gio.SimpleActionGroup()
+        VARIANT_TYPE_INT64 = GLib.VariantType.new('x')
+        VARIANT_TYPE_TUPLE = GLib.VariantType('(xx)')
+
+        def from_variant(value: GLib.Variant):
+            if value is None:
+                return None
+            if VARIANT_TYPE_INT64.equal(value.get_type()):
+                return value.get_int64()
+            if VARIANT_TYPE_TUPLE.equal(value.get_type()):
+                return (value.get_child_value(0).get_int64(), value.get_child_value(1).get_int64())
+            else:
+                raise ValueError(f'No mapping declared for value {value}')
+
+        show_actions.add_action(new_action(
+            TrackmaShowAction.PLAY_NEXT,
+            lambda _action, show_id: self._play_next(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.PLAY_EPISODE,
+            lambda _action, show_ep: self._play_episode(*from_variant(show_ep)),
+            VARIANT_TYPE_TUPLE))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.PLAY_RANDOM,
+            lambda _action: self._play_random()))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.DETAILS,
+            lambda _action, show_id: self._open_details(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.OPEN_WEBSITE,
+            lambda _action, show_id: self._open_website(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.OPEN_FOLDER,
+            lambda _action, show_id: self._open_folder(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.COPY_TITLE,
+            lambda _action, show_id: self._copy_title(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.CHANGE_ALTERNATIVE_TITLE,
+            lambda _action, show_id: self._change_alternative_title(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+        show_actions.add_action(new_action(
+            TrackmaShowAction.REMOVE,
+            lambda _action, show_id: self._remove_show(from_variant(show_id)),
+            VARIANT_TYPE_INT64))
+
+        self.insert_action_group('show', show_actions)
 
     def _set_mediatypes_action(self):
         action_name = 'change-mediatype'
@@ -225,11 +250,8 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         api_iconpath = 1
         api_iconfile = current_api[api_iconpath]
 
-        self.header_bar.set_subtitle(self._engine.api_info['name'] + " (" +
+        self.header_bar.get_title_widget().set_label(self._engine.api_info['name'] + " (" +
                                      self._engine.api_info['mediatype'] + ")")
-
-        if self.statusicon and self._config['tray_api_icon']:
-            self.statusicon.set_from_file(api_iconfile)
 
     def _on_change_mediatype(self, action, value):
         action.set_state(value)
@@ -368,8 +390,8 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         win.present()
         self._modals.append(win)
 
-    def _on_about(self, _action, _param):
-        about = Gtk.AboutDialog(parent=self)
+    def _create_about_dialog(self):
+        about = Gtk.AboutDialog()
         about.set_modal(True)
         about.set_transient_for(self)
         about.set_program_name("Trackma GTK")
@@ -381,10 +403,8 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         about.set_copyright("© z411, et al.")
         about.set_authors(["See AUTHORS file"])
         about.set_artists(["shuuichi"])
-        about.connect('destroy', self._on_modal_destroy)
-        about.connect('response', lambda dialog, response: dialog.destroy())
-        about.present()
-        self._modals.append(about)
+
+        return about
 
     def _on_modal_destroy(self, modal_window):
         self._modals.remove(modal_window)
@@ -407,7 +427,7 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         GLib.idle_add(self.get_application().quit)
 
     def _store_geometry(self):
-        (width, height) = self.get_size()
+        (width, height) = self.get_default_size()
         self._config['last_width'] = width
         self._config['last_height'] = height
         utils.save_config(self._config, self._configfile)
@@ -438,14 +458,17 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         def error_dialog_response(widget, response_id):
             widget.destroy()
 
-        dialog = Gtk.MessageDialog(self,
-                                   Gtk.DialogFlags.MODAL,
-                                   icon,
-                                   Gtk.ButtonsType.OK,
-                                   str(msg))
-        dialog.show_all()
-        dialog.connect("response", error_dialog_response)
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            message_type=icon,
+            buttons=Gtk.ButtonsType.OK,
+            modal=True,
+            text=str(msg))
+
         print('Error: {}'.format(msg))
+
+        dialog.connect("response", error_dialog_response)
+        dialog.show()
 
     def _on_action_play_next(self, action, param):
         selected_show = self._main_view.get_selected_show()

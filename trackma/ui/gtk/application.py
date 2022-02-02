@@ -14,19 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 from gi import require_version  # nopep8
-require_version('Gtk', '3.0')  # nopep8
+require_version('Gtk', '4.0')  # nopep8
+require_version('Adw', '1')  # nopep8
 
 from trackma import utils
 from trackma.ui.gtk.window import TrackmaWindow
-from gi.repository import GLib, Gio, Gtk
+from gi.repository import GLib, Gio, Gtk, Adw
 
 
-class TrackmaApplication(Gtk.Application):
+class TrackmaApplication(Adw.Application):
     __gtype_name__ = 'TrackmaApplication'
 
     def __init__(self):
         super().__init__(
-            application_id="com.github.z411.TrackmaGtk",
+            application_id="com.github.z411.TrackmaGtk.Devel",
             flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE | Gio.ApplicationFlags.NON_UNIQUE
         )
 
@@ -38,7 +39,7 @@ class TrackmaApplication(Gtk.Application):
         )
 
     def do_startup(self):
-        Gtk.Application.do_startup(self)
+        Adw.Application.do_startup(self)
 
         self._register_accelerators()
 
