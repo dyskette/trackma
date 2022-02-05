@@ -14,8 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import Gtk, Gdk, Pango, GObject
+from gi.repository import Gtk, Gdk, Gio, GLib, Pango, GObject, Graphene
 from trackma import utils
+from trackma.ui.gtk import TrackmaColumns
 
 
 class ShowListStore(Gtk.ListStore):
@@ -203,12 +204,15 @@ class ShowListFilter(Gtk.TreeModelFilter):
 
 
 class ShowTreeView(Gtk.TreeView):
+    __gtype_name__ = 'ShowTreeView'
+
     __gsignals__ = {'column-toggled': (GObject.SignalFlags.RUN_LAST,
                                        GObject.TYPE_PYOBJECT, (GObject.TYPE_STRING, GObject.TYPE_BOOLEAN))}
 
-    def __init__(self, colors, visible_columns, progress_style=1):
+    def __init__(self, window, status, colors, visible_columns, progress_style=1):
         Gtk.TreeView.__init__(self)
 
+        self._window = window
         self.colors = colors
         self.visible_columns = visible_columns
         self.progress_style = progress_style
@@ -218,120 +222,161 @@ class ShowTreeView(Gtk.TreeView):
         self.set_property('has-tooltip', True)
         self.connect('query-tooltip', self.show_tooltip)
 
-        self.cols = dict()
-        self.available_columns = (
-            ('Title', 1),
-            ('Progress', 2),
-            ('Score', 3),
-            ('Percent', 10),
-            ('Start', 11),
-            ('End', 12),
-            ('My start', 13),
-            ('My end', 14),
-        )
+        menu, action_group, action_group_name = self._create_header_action_menu(status)
+        self.insert_action_group(action_group_name, action_group)
 
-        for (name, sort) in self.available_columns:
-            self.cols[name] = Gtk.TreeViewColumn(name)
-            self.cols[name].set_sort_column_id(sort)
+        for column in TrackmaColumns().AVAILABLE_COLUMNS:
+            tree_column = self._create_treeview_column(column)
+            self._add_button_header_popover(tree_column, menu)
+            self.append_column(tree_column)
 
-            # This is a hack to allow for right-clickable header
-            label = Gtk.Label(name)
-            label.show()
-            self.cols[name].set_widget(label)
+    def _create_header_action_menu(self, status):
+        menu = Gio.Menu()
+        action_group = Gio.SimpleActionGroup()
+        action_group_name = 'columns'
 
-            self.append_column(self.cols[name])
+        for column in TrackmaColumns().AVAILABLE_COLUMNS:
+            is_active = column.description in self.visible_columns
+            status_name = status if status is not None else 'all'
+            action_name = 'view-column-{}-{}'.format(status_name, column.name)
 
-            w = self.cols[name].get_widget()
-            while not isinstance(w, Gtk.Button):
-                w = w.get_parent()
+            action = Gio.SimpleAction.new_stateful(
+                action_name,
+                None,
+                GLib.Variant.new_boolean(is_active))
 
-            w.connect('button-press-event', self._header_button_press)
+            action.connect('change-state', self._header_menu_item, column.description)
+            action_group.add_action(action)
 
-            if name not in self.visible_columns:
-                self.cols[name].set_visible(False)
+            menu.append(column.description, '{}.{}'.format(action_group_name, action_name))
 
-        #renderer_id = Gtk.CellRendererText()
-        #self.cols['ID'].pack_start(renderer_id, False, True, 0)
-        # self.cols['ID'].set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        # self.cols['ID'].set_expand(False)
-        #self.cols['ID'].add_attribute(renderer_id, 'text', 0)
+        return (menu, action_group, action_group_name)
 
-        renderer_title = Gtk.CellRendererText()
-        self.cols['Title'].pack_start(renderer_title, False)
-        self.cols['Title'].set_resizable(True)
-        self.cols['Title'].set_sizing(Gtk.TreeViewColumnSizing.FIXED)
-        self.cols['Title'].set_expand(True)
-        self.cols['Title'].add_attribute(renderer_title, 'text', 1)
+    def _create_treeview_column(self, column):
+        tree_column = Gtk.TreeViewColumn(column.description)
+        tree_column.name = column.name
+        tree_column.set_sort_column_id(column.order)
+
+        if column.description not in self.visible_columns:
+            tree_column.set_visible(False)
+
+        if column == TrackmaColumns().TITLE:
+            self._set_title_column(tree_column)
+        elif column == TrackmaColumns().PROGRESS:
+            self._set_progress_column(tree_column)
+        elif column == TrackmaColumns().STAT_PERCENTAGE:
+            self._set_percentage_column(tree_column)
+        elif column == TrackmaColumns().SCORE:
+            self._set_score_column(tree_column)
+        elif column == TrackmaColumns().START:
+            self._set_start_column(tree_column)
+        elif column == TrackmaColumns().END:
+            self._set_end_column(tree_column)
+        elif column == TrackmaColumns().MY_START:
+            self._set_my_start_column(tree_column)
+        elif column == TrackmaColumns().MY_END:
+            self._set_my_end_column(tree_column)
+
+        return tree_column
+
+    def _add_button_header_popover(self, tree_column, menu):
+        header_button = tree_column.get_button()
+
+        gesture_click_controller = Gtk.GestureClick()
+        gesture_click_controller.set_button(Gdk.BUTTON_SECONDARY)
+        gesture_click_controller.connect('pressed', self._header_button_press)
+        header_button.add_controller(gesture_click_controller)
+
+        popover = Gtk.PopoverMenu()
+        popover.set_menu_model(menu)
+        popover.set_parent(header_button)
+
+        header_button.popover_menu = popover
+
+    def _set_title_column(self, title_column):
+        renderer = Gtk.CellRendererText()
+        title_column.pack_start(renderer, False)
+        title_column.set_resizable(True)
+        title_column.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+        title_column.set_expand(True)
+        title_column.add_attribute(renderer, 'text', TrackmaColumns().TITLE)
         # Using foreground-gdk does not work, possibly due to the timing of it being set
-        self.cols['Title'].add_attribute(renderer_title, 'foreground', 9)
-        renderer_title.set_property('ellipsize', Pango.EllipsizeMode.END)
+        title_column.add_attribute(renderer, 'foreground', TrackmaColumns().COLOR)
+        renderer.set_property('ellipsize', Pango.EllipsizeMode.END)
 
-        renderer_progress = Gtk.CellRendererText()
-        self.cols['Progress'].pack_start(renderer_progress, False)
-        self.cols['Progress'].add_attribute(renderer_progress, 'text', 4)
-        self.cols['Progress'].set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        self.cols['Progress'].set_expand(False)
+    def _set_progress_column(self, progress_column):
+        renderer = Gtk.CellRendererText()
+        progress_column.pack_start(renderer, False)
+        progress_column.add_attribute(renderer, 'text', 4)
+        progress_column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        progress_column.set_expand(False)
 
+    def _set_percentage_column(self, percentage_column):
+        renderer = None
         if self.progress_style == 0:
-            renderer_percent = Gtk.CellRendererProgress()
-            self.cols['Percent'].pack_start(renderer_percent, False)
-            self.cols['Percent'].add_attribute(renderer_percent, 'value', 10)
+            renderer = Gtk.CellRendererProgress()
+            percentage_column.pack_start(renderer, False)
+            percentage_column.add_attribute(renderer, 'value', 10)
         else:
-            renderer_percent = ProgressCellRenderer(self.colors)
-            self.cols['Percent'].pack_start(renderer_percent, False)
-            self.cols['Percent'].add_attribute(renderer_percent, 'value', 2)
-            self.cols['Percent'].add_attribute(renderer_percent, 'total', 6)
-            self.cols['Percent'].add_attribute(renderer_percent, 'subvalue', 7)
-            self.cols['Percent'].add_attribute(renderer_percent, 'eps', 8)
-        renderer_percent.set_fixed_size(100, -1)
+            renderer = ProgressCellRenderer(self.colors)
+            percentage_column.pack_start(renderer, False)
+            percentage_column.add_attribute(renderer, 'value', 2)
+            percentage_column.add_attribute(renderer, 'total', 6)
+            percentage_column.add_attribute(renderer, 'subvalue', 7)
+            percentage_column.add_attribute(renderer, 'eps', 8)
+        renderer.set_fixed_size(100, -1)
 
+    def _set_score_column(self, score_column):
         renderer = Gtk.CellRendererText()
-        self.cols['Score'].pack_start(renderer, False)
-        self.cols['Score'].add_attribute(renderer, 'text', 5)
-        renderer = Gtk.CellRendererText()
-        self.cols['Start'].pack_start(renderer, False)
-        self.cols['Start'].add_attribute(renderer, 'text', 11)
-        renderer = Gtk.CellRendererText()
-        self.cols['End'].pack_start(renderer, False)
-        self.cols['End'].add_attribute(renderer, 'text', 12)
-        renderer = Gtk.CellRendererText()
-        self.cols['My start'].pack_start(renderer, False)
-        self.cols['My start'].add_attribute(renderer, 'text', 13)
-        renderer = Gtk.CellRendererText()
-        self.cols['My end'].pack_start(renderer, False)
-        self.cols['My end'].add_attribute(renderer, 'text', 14)
+        score_column.pack_start(renderer, False)
+        score_column.add_attribute(renderer, 'text', 5)
 
-    def _header_button_press(self, button, event):
-        if event.button == 3:
-            menu = Gtk.Menu()
-            for name, sort in self.available_columns:
-                is_active = name in self.visible_columns
+    def _set_start_column(self, start_column):
+        renderer = Gtk.CellRendererText()
+        start_column.pack_start(renderer, False)
+        start_column.add_attribute(renderer, 'text', 11)
 
-                item = Gtk.CheckMenuItem(name)
-                item.set_active(is_active)
-                item.connect('activate', self._header_menu_item,
-                             name, not is_active)
-                menu.append(item)
-                item.show()
+    def _set_end_column(self, end_column):
+        renderer = Gtk.CellRendererText()
+        end_column.pack_start(renderer, False)
+        end_column.add_attribute(renderer, 'text', 12)
 
-            menu.popup_at_pointer(event)
-            return True
+    def _set_my_start_column(self, my_start_column):
+        renderer = Gtk.CellRendererText()
+        my_start_column.pack_start(renderer, False)
+        my_start_column.add_attribute(renderer, 'text', 13)
 
-        return False
+    def _set_my_end_column(self, my_end_column):
+        renderer = Gtk.CellRendererText()
+        my_end_column.pack_start(renderer, False)
+        my_end_column.add_attribute(renderer, 'text', 14)
+
+    def _header_button_press(self, controller, n_press, x, y):
+        header_button = controller.get_widget()
+        self._show_popover(header_button.popover_menu, x, y)
+
+    def _show_popover(self, popover, x, y):
+        rect = Gdk.Rectangle()
+        rect.x = x
+        rect.y = y
+        popover.set_pointing_to(rect)
+        popover.popup()
+        return Gdk.EVENT_STOP
 
     @property
     def filter(self):
         return self.props.model.props.model
 
-    def show_tooltip(self, view, x, y, kbd, tip):
-        has_path, tx, ty, model, path, _iter = view.get_tooltip_context(
-            x, y, kbd)
+    def show_tooltip(self, view, x, y, keyboard_mode, tooltip):
+        has_path, model, path, _iter = view.get_tooltip_context(
+            x, y, keyboard_mode)
+
         if has_path:
-            _, col, _, _ = view.get_path_at_pos(tx, ty)
+            _, col, _, _ = view.get_path_at_pos(x, y)
             renderer = next(k for i, k in enumerate(col.get_cells()) if i == 0)
             lines = []
 
-            if col == self.cols['Percent']:
+            if col.name == TrackmaColumns().STAT_PERCENTAGE.name:
                 lines.append("Watched: %d" %
                              view.filter.get_value(path, 'stat'))
                 if view.filter.get_value(path, 'subvalue') and not view.filter.get_value(path, 'status') == utils.Status.NOTYET:
@@ -346,13 +391,15 @@ class ShowTreeView(Gtk.TreeView):
                              (view.filter.get_value(path, 'total-eps') or '?'))
 
             if len(lines):
-                tip.set_markup('\n'.join(lines))
-                self.set_tooltip_cell(tip, path, col, renderer)
+                tooltip.set_markup('\n'.join(lines))
+                self.set_tooltip_cell(tooltip, path, col, renderer)
                 return True
+
         return False
 
-    def _header_menu_item(self, w, column_name, visible):
-        self.emit('column-toggled', column_name, visible)
+    def _header_menu_item(self, action, new_visible_state, column_name):
+        action.set_state(new_visible_state)
+        self.emit('column-toggled', column_name, new_visible_state)
 
     def select(self, show):
         """Select specified row or first if not found"""
@@ -412,13 +459,12 @@ class ProgressCellRenderer(Gtk.CellRenderer):
     def do_get_property(self, pspec):
         return getattr(self, pspec.name)
 
-    def do_render(self, cr, widget, background_area, cell_area, flags):
+    def do_snapshot(self, snapshot, widget, background_area, cell_area, flags):
         (x, y, w, h) = self.do_get_size(widget, cell_area)
 
-        # set_source_rgb(0.9, 0.9, 0.9)
-        cr.set_source_rgb(*self.__get_color(self.colors['progress_bg']))
-        cr.rectangle(x, y, w, h)
-        cr.fill()
+        snapshot.append_color(
+            self.__get_color(self.colors['progress_bg']),
+            Graphene.Rect.alloc().init(x, y, w, h))
 
         if not self.total:
             return
@@ -429,37 +475,32 @@ class ProgressCellRenderer(Gtk.CellRenderer):
             else:
                 mid = int(w / float(self.total) * self.subvalue)
 
-            # set_source_rgb(0.7, 0.7, 0.7)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_bg']))
-            cr.rectangle(x, y+h-self._subheight, mid, h-(h-self._subheight))
-            cr.fill()
+            snapshot.append_color(
+                self.__get_color(self.colors['progress_sub_bg']),
+                Graphene.Rect.alloc().init(x, y+h-self._subheight, mid, h-(h-self._subheight)))
 
         if self.value:
             if self.value >= self.total:
-                # set_source_rgb(0.6, 0.8, 0.7)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_complete']))
-                cr.rectangle(x, y, w, h)
+                snapshot.append_color(
+                    self.__get_color(self.colors['progress_complete']),
+                    Graphene.Rect.alloc().init(x, y, w, h))
             else:
                 mid = int(w / float(self.total) * self.value)
-                # set_source_rgb(0.6, 0.7, 0.8)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_fg']))
-                cr.rectangle(x, y, mid, h)
-            cr.fill()
+
+                snapshot.append_color(
+                    self.__get_color(self.colors['progress_fg']),
+                    Graphene.Rect.alloc().init(x, y, mid, h))
 
         if self.eps:
-            # set_source_rgb(0.4, 0.5, 0.6)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_fg']))
             for episode in self.eps:
                 if episode > 0 and episode <= self.total:
                     start = int(w / float(self.total) * (episode - 1))
                     finish = int(w / float(self.total) * episode)
-                    cr.rectangle(x+start, y+h-self._subheight,
-                                 finish-start, h-(h-self._subheight))
-                    cr.fill()
+
+                    snapshot.append_color(
+                        self.__get_color(self.colors['progress_sub_fg']),
+                        Graphene.Rect.alloc().init(x+start, y+h-self._subheight,
+                                      finish-start, h-(h-self._subheight)))
 
     def do_get_size(self, widget, cell_area):
         if cell_area is None:
@@ -472,5 +513,7 @@ class ProgressCellRenderer(Gtk.CellRenderer):
 
     @staticmethod
     def __get_color(color_string):
-        color = Gdk.color_parse(color_string)
-        return color.red_float, color.green_float, color.blue_float
+        color = Gdk.RGBA()
+        color.parse(color_string)
+        return color
+
