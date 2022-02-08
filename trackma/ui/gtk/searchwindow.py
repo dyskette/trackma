@@ -83,8 +83,8 @@ class SearchWindow(Gtk.Window):
         self.info.set_size_request(200, 350)
         self.info.show()
 
-        self.shows_viewport.add(self.showlist)
-        self.show_info_container.pack_start(self.info, True, True, 0)
+        self.shows_viewport.set_child(self.showlist)
+        self.show_info_container.prepend(self.info)
         self.search_paned.set_position(400)
         self.set_size_request(450, 350)
 
@@ -104,19 +104,12 @@ class SearchWindow(Gtk.Window):
         if self._search_thread:
             self._search_thread.stop()
 
-        self.headerbar.set_subtitle("Searching: \"%s\"" % text)
         self._search_thread = SearchThread(self._engine,
                                            text,
                                            self._search_finish_idle)
         self._search_thread.start()
 
     def _search_finish(self):
-        self.headerbar.set_subtitle(
-            "%s result%s." % ((len(self._entries), 's')
-                              if len(self._entries) > 0
-                              else ('No', '')
-                              )
-        )
         self.progress_spinner.stop()
 
     def _search_finish_idle(self, entries, error):
@@ -203,7 +196,6 @@ class SearchTreeView(Gtk.TreeView):
         self.colors = colors
 
     def append_start(self):
-        self.freeze_child_notify()
         self.store.clear()
 
     def append(self, show):
@@ -223,5 +215,4 @@ class SearchTreeView(Gtk.TreeView):
         self.store.append(row)
 
     def append_finish(self):
-        self.thaw_child_notify()
         self.store.set_sort_column_id(1, Gtk.SortType.ASCENDING)
