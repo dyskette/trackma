@@ -12,7 +12,7 @@ NAME = "Trackma"
 REQUIREMENTS = []
 EXTRA_REQUIREMENTS = {
     'curses': ['urwid'],
-    'GTK': ['pygobject'],
+    'GTK': ['loguru', 'pygobject'],
     'Qt': [],
 }
 

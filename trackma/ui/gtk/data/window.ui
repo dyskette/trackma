@@ -1,36 +1,127 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <template class="TrackmaWindow" parent="AdwApplicationWindow">
-    <property name="default_width">600</property>
-    <property name="default_height">600</property>
+    <property name="title" translatable="yes"></property>
+    <property name="icon-name">com.github.z411.Trackma</property>
+    <property name="default-width">700</property>
+    <property name="default-height">700</property>
     <child>
-      <object class="GtkBox" id="main_container">
-        <property name="orientation">vertical</property>
+      <object class="AdwLeaflet" id="leaflet">
+        <property name="vexpand">1</property>
+        <property name="can-unfold">0</property>
         <child>
-          <object class="GtkHeaderBar" id="header_bar">
-            <property name="show-title-buttons">True</property>
-            <property name="title-widget">
-              <object class="GtkLabel"></object>
-            </property>
-            <child type="end">
-              <object class="GtkMenuButton" id="btn_appmenu">
-                <property name="popover">popover_appmenu</property>
-                <property name="icon-name">open-menu-symbolic</property>
+          <object class="GtkBox" id="home">
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="AdwHeaderBar" id="home_header_bar">
+                <child type="end">
+                  <object class="GtkMenuButton" id="home_menu_button">
+                    <property name="valign">center</property>
+                    <property name="menu_model">homemenu</property>
+                    <property name="icon_name">open-menu-symbolic</property>
+                    <property name="direction">none</property>
+                  </object>
+                </child>
               </object>
             </child>
-            <child type="end">
-              <object class="GtkMenuButton" id="btn_mediatype">
-                <property name="popover">popover_mediatype</property>
-                <property name="icon-name">content-loading-symbolic</property>
+            <child>
+              <object class="AdwStatusPage">
+                <property name="title" translatable="yes">Accounts list</property>
+                <!-- <property name="description" translatable="yes">Please add one account to begin</property> -->
+                <property name="vexpand">True</property>
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">Add account</property>
+                    <property name="action-name">account.add</property>
+                    <property name="halign">center</property>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
+        </child>
+        <child>
+          <object class="TrackmaAccountsView" id="accounts_view" />
+        </child>
+	<child>
+	  <object class="TrackmaNewAccountView" id="new_account_view" />
+	</child>
+        <child>
+          <object class="TrackmaTitlesView" id="titles_view" />
         </child>
       </object>
     </child>
   </template>
 
-  <object class="GtkPopover" id="popover_appmenu"></object>
+  <menu id="homemenu">
+    <section>
+      <item>
+        <attribute name="action">win.preferences</attribute>
+        <attribute name="label" translatable="yes">Preferences</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.show-help-overlay</attribute>
+        <attribute name="label" translatable="yes">Keyboard Shortcuts</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.about</attribute>
+        <attribute name="label" translatable="yes">About Trackma</attribute>
+      </item>
+      <item>
+        <attribute name="action">app.quit</attribute>
+        <attribute name="label" translatable="yes">Quit</attribute>
+      </item>
+    </section>
+  </menu>
 
-  <object class="GtkPopover" id="popover_mediatype"></object>
+  <menu id="accountsmenu">
+    <section>
+      <item>
+        <attribute name="action">win.search</attribute>
+        <attribute name="label" translatable="yes">Search</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.accounts</attribute>
+        <attribute name="label" translatable="yes">Accounts</attribute>
+      </item>
+    </section>
+
+    <section>
+      <item>
+        <attribute name="action">win.syncronize</attribute>
+        <attribute name="label" translatable="yes">Synchronize</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.upload</attribute>
+        <attribute name="label" translatable="yes">Upload</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.download</attribute>
+        <attribute name="label" translatable="yes">Download</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.scanfiles</attribute>
+        <attribute name="label" translatable="yes">Scan files</attribute>
+      </item>
+    </section>
+
+    <section>
+      <item>
+        <attribute name="action">win.preferences</attribute>
+        <attribute name="label" translatable="yes">Preferences</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.show-help-overlay</attribute>
+        <attribute name="label" translatable="yes">Keyboard Shortcuts</attribute>
+      </item>
+      <item>
+        <attribute name="action">win.about</attribute>
+        <attribute name="label" translatable="yes">About Trackma</attribute>
+      </item>
+      <item>
+        <attribute name="action">app.quit</attribute>
+        <attribute name="label" translatable="yes">Quit</attribute>
+      </item>
+    </section>
+  </menu>
 </interface>

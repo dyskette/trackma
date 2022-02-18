@@ -14,679 +14,133 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys
 import os
-import subprocess
-import threading
-
 from gi.repository import GLib, Gio, Gtk, Gdk, Adw
-from trackma.ui.gtk import gtk_dir, TrackmaShowAction
-from trackma.ui.gtk.accountswindow import AccountsWindow
-from trackma.ui.gtk.mainview import MainView
-from trackma.ui.gtk.searchwindow import SearchWindow
-from trackma.ui.gtk.settingswindow import SettingsWindow
-from trackma.ui.gtk.showeventtype import ShowEventType
-from trackma.ui.gtk.showinfowindow import ShowInfoWindow
-from trackma.engine import Engine
-from trackma.accounts import AccountManager
+from loguru import logger
 from trackma import messenger
 from trackma import utils
-
+from trackma.accounts import AccountManager
+from trackma.ui.gtk.accountsview import TrackmaAccountsView
+from trackma.ui.gtk.newaccountview import TrackmaNewAccountView
+from trackma.ui.gtk.titlesview import TrackmaTitlesView
+from trackma.engine import Engine
+from trackma.ui.gtk import gtk_dir
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/window.ui'))
 class TrackmaWindow(Adw.ApplicationWindow):
+
     __gtype_name__ = 'TrackmaWindow'
 
-    btn_appmenu = Gtk.Template.Child()
-    btn_mediatype = Gtk.Template.Child()
-    header_bar = Gtk.Template.Child()
-    main_container = Gtk.Template.Child()
+    # All views
+    leaflet = Gtk.Template.Child()
+    home = Gtk.Template.Child()
+    new_account_view = Gtk.Template.Child()
+    accounts_view = Gtk.Template.Child()
+    titles_view = Gtk.Template.Child()
 
-    def __init__(self, app, debug=False):
-        Adw.ApplicationWindow.__init__(self, application=app)
-        self.init_template()
+    def __init__(self, app):
+        ''' Trackma Window class
 
-        self._debug = debug
-        self._configfile = utils.to_config_path('ui-Gtk.json')
-        self._config = utils.parse_config(self._configfile, utils.gtk_defaults)
+            Args:
+                app (Adw.Application): the application instance
+                debug (bool): flag to show debugging information
+        '''
+        super().__init__(application=app)
 
-        self._main_view = None
-        self._modals = []
+        self._window_actions = [
+            ( 'new-account', self._on_home ),
+            ( 'home', self._on_accounts ),
+            ( 'titles', self._on_titles, "i" ),
+            ( 'preferences', self._on_preferences ),
+            ( 'about', self._on_about ),
+        ]
 
-        self._account = None
-        self._engine = None
-        self.close_thread = None
-        self.hidden = False
+        self._list_actions = [
+            ( 'search', self._on_action ),
+            ( 'syncronize', self._on_action ),
+            ( 'upload', self._on_action ),
+            ( 'download', self._on_action ),
+            ( 'scanfiles', self._on_action ),
+        ]
 
-        self._init_widgets()
+        self._show_actions = [
+            ( 'play-next', self._on_action ),
+            ( 'play-episode', self._on_action ),
+            ( 'play-random', self._on_action ),
+            ( 'view-details', self._on_action ),
+            ( 'open-website', self._on_action ),
+            ( 'open-folder', self._on_action ),
+            ( 'copy-title', self._on_action ),
+            ( 'set-alternative-title', self._on_action ),
+            ( 'remove', self._on_action ),
+        ]
 
-    def init_account_selection(self):
-        manager = AccountManager()
+        self._register_actions()
+        self._create_help_overlay()
+        self.activate_action('win.home')
 
-        # Use the remembered account if there's one
-        if manager.get_default():
-            self._create_engine(manager.get_default())
+    def _on_home(self, action, parameter, user_data):
+        if len(AccountManager().get_accounts()) > 0:
+            self.leaflet.set_visible_child(self.new_account_view)
         else:
-            self._show_accounts(switch=False)
+            self.leaflet.set_visible_child(self.home)
 
-    def _init_widgets(self):
-        # Gtk.Window.set_default_icon_from_file(utils.DATADIR + '/icon.png')
-        # self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_title('Trackma')
-        self.get_style_context().add_class('devel')
+    def _on_accounts(self, action, parameter, user_data):
+        self.accounts_view.refresh()
+        self.leaflet.set_visible_child(self.accounts_view)
 
-        if self._config['remember_geometry']:
-            self.set_default_size(self._config['last_width'], self._config['last_height'])
+    def _on_titles(self, action, parameter, account_id):
+        self.leaflet.set_visible_child(self.titles_view)
 
-        if not self._main_view:
-            self._main_view = MainView(self, self._config)
-            self._main_view.connect('error', self._on_main_view_error)
-            self._main_view.connect(
-                'success', lambda x: self._set_buttons_sensitive(True))
-            self._main_view.connect(
-                'error-fatal', self._on_main_view_error_fatal)
-            self._main_view.connect('show-action', self._on_show_action)
-            self.main_container.append(self._main_view)
+    def _on_account_list(self, action, parameter):
+        raise NotImplementedError('Account list action callback is not implemented yet')
 
-        self.connect('close-request', self._on_delete_event)
+    def _on_account_content(self, action, parameter):
+        self._engine = Engine(account, self._message_handler)
 
+    def _on_about(self, action, parameter):
+        raise NotImplementedError('On about action is not implemented')
+
+    def _on_preferences(self, action, parameter):
+        raise NotImplementedError('On preferences action is not implemented')
+
+    def _on_action(self, action, parameter):
+        raise NotImplementedError('On action callback is not implemented')
+
+    def _error_dialog(error):
+        dialog = Gtk.MessageDialog(
+            transient_for=None,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.CLOSE,
+            modal=False,
+            text=str(error))
+        dialog.connect('response', lambda _dialog, response: _dialog.destroy())
+        dialog.show()
+
+    def _message_handler(self, classname, msgtype, msg):
+        if msgtype == messenger.TYPE_WARN:
+            logger.warning('Engine message: {}', msg)
+        elif msgtype != messenger.TYPE_DEBUG:
+            logger.info('Engine message: {}', msg)
+        else:
+            logger.debug('Engine message: {}', msg)
+
+    def quit(self):
+        self.get_application().quit()
+
+    def _register_actions(self):
+        self.add_action_entries(self._window_actions)
+
+        list_actions = Gio.SimpleActionGroup()
+        list_actions.add_action_entries(self._list_actions)
+        self.insert_action_group('list', list_actions)
+
+        show_actions = Gio.SimpleActionGroup()
+        show_actions.add_action_entries(self._show_actions)
+        self.insert_action_group('show', show_actions)
+
+    def _create_help_overlay(self):
         builder = Gtk.Builder.new_from_file(
             os.path.join(gtk_dir, 'data/shortcuts.ui'))
         help_overlay = builder.get_object('shortcuts-window')
         self.set_help_overlay(help_overlay)
-
-        self._about = self._create_about_dialog()
-        self._about.connect('close-request', lambda dialog: self._about.hide())
-        self.present()
-
-    def _on_tray_hide_clicked(self, status_icon):
-        self._destroy_modals()
-
-        if self.hidden:
-            self.deiconify()
-            self.present()
-
-            if not self._engine:
-                self._show_accounts(switch=False)
-        else:
-            self.hide()
-
-        self.hidden = not self.hidden
-
-    def _destroy_modals(self):
-        self.get_help_overlay().hide()
-
-        for modal_window in self._modals:
-            modal_window.destroy()
-
-        self._modals = []
-
-    def _on_tray_about_clicked(self, status_icon):
-        self._on_about(None, None)
-
-    def _on_tray_quit_clicked(self, status_icon):
-        self._quit()
-
-    def _on_delete_event(self, widget):
-        self._quit()
-        return True
-
-    def _create_engine(self, account):
-        self._engine = Engine(account, self._message_handler)
-
-        self._main_view.load_engine_account(self._engine, account)
-        self._set_actions()
-        self._set_mediatypes_menu()
-        self._update_widgets(account)
-        self._set_buttons_sensitive(True)
-
-    def _set_actions(self):
-        builder = Gtk.Builder.new_from_file(
-            os.path.join(gtk_dir, 'data/app-menu.ui'))
-        settings = Gtk.Settings.get_default()
-        if not settings.get_property("gtk-shell-shows-menubar"):
-            self.btn_appmenu.set_menu_model(builder.get_object('app-menu'))
-        else:
-            self.get_application().set_menubar(builder.get_object('menu-bar'))
-            self.btn_appmenu.set_property('visible', False)
-
-        def new_action(name, callback, parameterType=None):
-            action = Gio.SimpleAction.new(name, parameterType)
-            action.connect('activate', callback)
-            return action
-
-        self.add_action(new_action('search', self._on_search))
-        self.add_action(new_action('syncronize', self._on_synchronize))
-        self.add_action(new_action('upload', self._on_upload))
-        self.add_action(new_action('download', self._on_download))
-        self.add_action(new_action('scanfiles', self._on_scanfiles))
-        self.add_action(new_action('accounts', self._on_accounts))
-        self.add_action(new_action('preferences', self._on_preferences))
-        self.add_action(new_action('about', lambda a, b: self._about.present()))
-
-        show_actions = Gio.SimpleActionGroup()
-        VARIANT_TYPE_INT64 = GLib.VariantType.new('x')
-        VARIANT_TYPE_TUPLE = GLib.VariantType('(xx)')
-
-        def from_variant(value: GLib.Variant):
-            if value is None:
-                return None
-            if VARIANT_TYPE_INT64.equal(value.get_type()):
-                return value.get_int64()
-            if VARIANT_TYPE_TUPLE.equal(value.get_type()):
-                return (value.get_child_value(0).get_int64(), value.get_child_value(1).get_int64())
-            else:
-                raise ValueError(f'No mapping declared for value {value}')
-
-        show_actions.add_action(new_action(
-            TrackmaShowAction.PLAY_NEXT,
-            lambda _action, show_id: self._play_next(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.PLAY_EPISODE,
-            lambda _action, show_ep: self._play_episode(*from_variant(show_ep)),
-            VARIANT_TYPE_TUPLE))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.PLAY_RANDOM,
-            lambda _action: self._play_random()))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.DETAILS,
-            lambda _action, show_id: self._open_details(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.OPEN_WEBSITE,
-            lambda _action, show_id: self._open_website(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.OPEN_FOLDER,
-            lambda _action, show_id: self._open_folder(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.COPY_TITLE,
-            lambda _action, show_id: self._copy_title(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.CHANGE_ALTERNATIVE_TITLE,
-            lambda _action, show_id: self._change_alternative_title(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-        show_actions.add_action(new_action(
-            TrackmaShowAction.REMOVE,
-            lambda _action, show_id: self._remove_show(from_variant(show_id)),
-            VARIANT_TYPE_INT64))
-
-        self.insert_action_group('show', show_actions)
-
-    def _set_mediatypes_action(self):
-        action_name = 'change-mediatype'
-        if self.has_action(action_name):
-            self.remove_action(action_name)
-
-        state = GLib.Variant.new_string(self._engine.api_info['mediatype'])
-        action = Gio.SimpleAction.new_stateful(action_name,
-                                               state.get_type(),
-                                               state)
-        action.connect('change-state', self._on_change_mediatype)
-        self.add_action(action)
-
-    def _set_mediatypes_menu(self):
-        self._set_mediatypes_action()
-        menu = Gio.Menu()
-
-        for mediatype in self._engine.api_info['supported_mediatypes']:
-            variant = GLib.Variant.new_string(mediatype)
-            menu_item = Gio.MenuItem()
-            menu_item.set_label(mediatype)
-            menu_item.set_action_and_target_value(
-                'win.change-mediatype', variant)
-            menu.append_item(menu_item)
-
-        self.btn_mediatype.set_menu_model(menu)
-
-        if len(self._engine.api_info['supported_mediatypes']) <= 1:
-            self.btn_mediatype.hide()
-
-    def _update_widgets(self, account):
-        current_api = utils.available_libs[account['api']]
-        api_iconpath = 1
-        api_iconfile = current_api[api_iconpath]
-
-        self.header_bar.get_title_widget().set_label(self._engine.api_info['name'] + " (" +
-                                     self._engine.api_info['mediatype'] + ")")
-
-    def _on_change_mediatype(self, action, value):
-        action.set_state(value)
-        mediatype = value.get_string()
-        self._set_buttons_sensitive(False)
-        self._main_view.load_account_mediatype(
-            None, mediatype, self.header_bar)
-
-    def _on_search(self, action, param):
-        current_status = self._main_view.get_current_status()
-        win = SearchWindow(
-            self._engine, self._config['colors'], current_status, transient_for=self)
-        win.connect('search-error', self._on_search_error)
-        win.connect('destroy', self._on_modal_destroy)
-        win.present()
-        self._modals.append(win)
-
-    def _on_search_error(self, search_window, error_msg):
-        print(error_msg)
-
-    def _on_synchronize(self, action, param):
-        threading.Thread(target=self._synchronization_task,
-                         args=(True, True)).start()
-
-    def _on_upload(self, action, param):
-        threading.Thread(target=self._synchronization_task,
-                         args=(True, False)).start()
-
-    def _on_download(self, action, param):
-        def _download_lists():
-            threading.Thread(target=self._synchronization_task,
-                             args=(False, True)).start()
-
-        def _on_download_response(_dialog, response):
-            _dialog.destroy()
-
-            if response == Gtk.ResponseType.YES:
-                _download_lists()
-
-        queue = self._engine.get_queue()
-        if queue:
-            dialog = Gtk.MessageDialog(self,
-                                       Gtk.DialogFlags.MODAL,
-                                       Gtk.MessageType.QUESTION,
-                                       Gtk.ButtonsType.YES_NO,
-                                       "There are %d queued changes in your list. If you retrieve the remote list now you will lose your queued changes. Are you sure you want to continue?" % len(queue))
-            dialog.show_all()
-            dialog.connect("response", _on_download_response)
-        else:
-            # If the user doesn't have any queued changes
-            # just go ahead
-            _download_lists()
-
-    def _synchronization_task(self, send, retrieve):
-        self._set_buttons_sensitive_idle(False)
-
-        try:
-            if send:
-                self._engine.list_upload()
-            if retrieve:
-                self._engine.list_download()
-
-            # GLib.idle_add(self._set_score_ranges)
-            GLib.idle_add(self._main_view.populate_all_pages)
-        except utils.TrackmaError as e:
-            self._error_dialog_idle(e)
-        except utils.TrackmaFatal as e:
-            self._show_accounts_idle(switch=False, forget=True)
-            self._error_dialog_idle("Fatal engine error: %s" % e)
-            return
-
-        self._main_view.set_status_idle("Ready.")
-        self._set_buttons_sensitive_idle(True)
-
-    def _on_scanfiles(self, action, param):
-        threading.Thread(target=self._scanfiles_task).start()
-
-    def _scanfiles_task(self):
-        self._set_buttons_sensitive_idle(False)
-        try:
-            self._engine.scan_library(rescan=True)
-        except utils.TrackmaError as e:
-            self._error_dialog_idle(e)
-
-        GLib.idle_add(self._main_view.populate_all_pages)
-
-        self._main_view.set_status_idle("Ready.")
-        self._set_buttons_sensitive_idle(True)
-
-    def _on_accounts(self, action, param):
-        self._show_accounts()
-
-    def _show_accounts_idle(self, switch=True, forget=False):
-        GLib.idle_add(self._show_accounts, switch, forget)
-
-    def _show_accounts(self, switch=True, forget=False):
-        manager = AccountManager()
-
-        if forget:
-            manager.set_default(None)
-
-        accountsel = AccountsWindow(manager, transient_for=self)
-        accountsel.connect('account-open', self._on_account_open)
-        accountsel.connect('account-cancel', self._on_account_cancel, switch)
-        accountsel.connect('destroy', self._on_modal_destroy)
-        accountsel.present()
-        self._modals.append(accountsel)
-
-    def _on_account_open(self, accounts_window, account_num, remember):
-        manager = AccountManager()
-        account = manager.get_account(account_num)
-
-        if remember:
-            manager.set_default(account_num)
-        else:
-            manager.set_default(None)
-
-        # Reload the engine if already started,
-        # start it otherwise
-        self._set_buttons_sensitive(False)
-        if self._engine and self._engine.loaded:
-            self._main_view.load_account_mediatype(account, None, None)
-        else:
-            self._create_engine(account)
-
-    def _on_account_cancel(self, _accounts_window, switch):
-        manager = AccountManager()
-
-        if not switch or not manager.get_accounts():
-            self._quit()
-
-    def _on_preferences(self, _action, _param):
-        win = SettingsWindow(self._engine, self._config,
-                             self._configfile, transient_for=self)
-        win.connect('destroy', self._on_modal_destroy)
-        win.present()
-        self._modals.append(win)
-
-    def _create_about_dialog(self):
-        about = Gtk.AboutDialog()
-        about.set_modal(True)
-        about.set_transient_for(self)
-        about.set_program_name("Trackma GTK")
-        about.set_version(utils.VERSION)
-        about.set_license_type(Gtk.License.GPL_3_0_ONLY)
-        about.set_comments(
-            "Trackma is an open source client for media tracking websites.\nThanks to all contributors.")
-        about.set_website("http://github.com/z411/trackma")
-        about.set_copyright("© z411, et al.")
-        about.set_authors(["See AUTHORS file"])
-        about.set_artists(["shuuichi"])
-
-        return about
-
-    def _on_modal_destroy(self, modal_window):
-        self._modals.remove(modal_window)
-
-    def _quit(self):
-        if self._config['remember_geometry']:
-            self._store_geometry()
-
-        if not self._engine:
-            self.get_application().quit()
-            return
-
-        if self.close_thread is None:
-            self._set_buttons_sensitive_idle(False)
-            self.close_thread = threading.Thread(target=self._unload_task)
-            self.close_thread.start()
-
-    def _unload_task(self):
-        self._engine.unload()
-        GLib.idle_add(self.get_application().quit)
-
-    def _store_geometry(self):
-        (width, height) = self.get_default_size()
-        self._config['last_width'] = width
-        self._config['last_height'] = height
-        utils.save_config(self._config, self._configfile)
-
-    def _message_handler(self, classname, msgtype, msg):
-        # Thread safe
-        # print("%s: %s" % (classname, msg))
-        if msgtype == messenger.TYPE_WARN:
-            self._main_view.set_status_idle(
-                "%s warning: %s" % (classname, msg))
-        elif msgtype != messenger.TYPE_DEBUG:
-            self._main_view.set_status_idle("%s: %s" % (classname, msg))
-        elif self._debug:
-            print('[D] {}: {}'.format(classname, msg))
-
-    def _on_main_view_error(self, main_view, error_msg):
-        self._error_dialog_idle(error_msg)
-
-    def _on_main_view_error_fatal(self, main_view, error_msg):
-        self._show_accounts_idle(switch=False, forget=True)
-        self._error_dialog_idle(error_msg)
-
-    def _error_dialog_idle(self, msg, icon=Gtk.MessageType.ERROR):
-        # Thread safe
-        GLib.idle_add(self._error_dialog, msg, icon)
-
-    def _error_dialog(self, msg, icon=Gtk.MessageType.ERROR):
-        def error_dialog_response(widget, response_id):
-            widget.destroy()
-
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            message_type=icon,
-            buttons=Gtk.ButtonsType.OK,
-            modal=True,
-            text=str(msg))
-
-        print('Error: {}'.format(msg))
-
-        dialog.connect("response", error_dialog_response)
-        dialog.show()
-
-    def _on_action_play_next(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._play_next(selected_show)
-
-    def _on_action_play_random(self, action, param):
-        self._play_random()
-
-    def _on_action_episode_add(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._episode_add(selected_show)
-
-    def _on_action_episode_remove(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._episode_remove(selected_show)
-
-    def _on_action_delete(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._remove_show(selected_show)
-
-    def _on_action_copy(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._copy_title(selected_show)
-
-    def _on_show_action(self, main_view, event_type, data):
-        if event_type == ShowEventType.PLAY_NEXT:
-            self._play_next(*data)
-        elif event_type == ShowEventType.PLAY_EPISODE:
-            self._play_episode(*data)
-        elif event_type == ShowEventType.EPISODE_REMOVE:
-            self._episode_remove(*data)
-        elif event_type == ShowEventType.EPISODE_SET:
-            self._episode_set(*data)
-        elif event_type == ShowEventType.EPISODE_ADD:
-            self._episode_add(*data)
-        elif event_type == ShowEventType.SET_SCORE:
-            self._set_score(*data)
-        elif event_type == ShowEventType.SET_STATUS:
-            self._set_status(*data)
-        elif event_type == ShowEventType.DETAILS:
-            self._open_details(*data)
-        elif event_type == ShowEventType.OPEN_WEBSITE:
-            self._open_website(*data)
-        elif event_type == ShowEventType.OPEN_FOLDER:
-            self._open_folder(*data)
-        elif event_type == ShowEventType.COPY_TITLE:
-            self._copy_title(*data)
-        elif event_type == ShowEventType.CHANGE_ALTERNATIVE_TITLE:
-            self._change_alternative_title(*data)
-        elif event_type == ShowEventType.REMOVE:
-            self._remove_show(*data)
-
-    def _play_next(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        try:
-            args = self._engine.play_episode(show)
-            utils.spawn_process(args)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _play_episode(self, show_id, episode):
-        show = self._engine.get_show_info(show_id)
-        try:
-            if not episode:
-                episode = self.show_ep_num.get_value_as_int()
-            args = self._engine.play_episode(show, episode)
-            utils.spawn_process(args)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _play_random(self):
-        try:
-            args = self._engine.play_random()
-            utils.spawn_process(args)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _episode_add(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        self._episode_set(show_id, show['my_progress'] + 1)
-
-    def _episode_remove(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        self._episode_set(show_id, show['my_progress'] - 1)
-
-    def _episode_set(self, show_id, episode):
-        try:
-            self._engine.set_episode(show_id, episode)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _set_score(self, show_id, score):
-        try:
-            self._engine.set_score(show_id, score)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _set_status(self, show_id, status):
-        try:
-            self._engine.set_status(show_id, status)
-        except utils.TrackmaError as e:
-            self._error_dialog(e)
-
-    def _open_details(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        win = ShowInfoWindow(self._engine, show, transient_for=self)
-        win.connect('destroy', self._on_modal_destroy)
-        win.present()
-        self._modals.append(win)
-
-    def _open_website(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        if show['url']:
-            Gtk.show_uri(None, show['url'], Gdk.CURRENT_TIME)
-
-    def _open_folder(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        try:
-            filename = self._engine.get_episode_path(show, 1)
-            with open(os.devnull, 'wb') as DEVNULL:
-                if sys.platform == 'darwin':
-                    subprocess.Popen(["open", os.path.dirname(filename)],
-                                     stdout=DEVNULL,
-                                     stderr=DEVNULL)
-                elif sys.platform == 'win32':
-                    subprocess.Popen(["explorer", os.path.dirname(filename)],
-                                     stdout=DEVNULL,
-                                     stderr=DEVNULL)
-                else:
-                    subprocess.Popen(["/usr/bin/xdg-open", os.path.dirname(filename)],
-                                     stdout=DEVNULL,
-                                     stderr=DEVNULL)
-        except OSError:
-            # xdg-open failed.
-            raise utils.EngineError("Could not open folder.")
-
-        except utils.EngineError:
-            # Show not in library.
-            self._error_dialog_idle("No folder found.")
-
-    def _copy_title(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(show['title'], -1)
-
-        self._main_view.set_status_idle('Title copied to clipboard.')
-
-    def _change_alternative_title(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        current_altname = self._engine.altname(show_id)
-
-        def altname_response(entry, dialog, response):
-            dialog.response(response)
-
-        dialog = Gtk.MessageDialog(
-            self,
-            Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            Gtk.MessageType.QUESTION,
-            Gtk.ButtonsType.OK_CANCEL,
-            None)
-        dialog.set_markup('Set the <b>alternate title</b> for the show.')
-        entry = Gtk.Entry()
-        entry.set_text(current_altname)
-        entry.connect("activate", altname_response,
-                      dialog, Gtk.ResponseType.OK)
-        hbox = Gtk.HBox()
-        hbox.pack_start(Gtk.Label("Alternate Title:"), False, 5, 5)
-        hbox.pack_end(entry, True, True, 0)
-        dialog.format_secondary_markup(
-            "Use this if the tracker is unable to find this show. Leave blank to disable.")
-        dialog.vbox.pack_end(hbox, True, True, 0)
-        dialog.show_all()
-        retval = dialog.run()
-
-        if retval == Gtk.ResponseType.OK:
-            text = entry.get_text()
-            self._engine.altname(show_id, text)
-            self._main_view.change_show_title_idle(show, text)
-
-        dialog.destroy()
-
-    def _remove_show(self, show_id):
-        try:
-            show = self._engine.get_show_info(show_id)
-            self._engine.delete_show(show)
-        except utils.TrackmaError as e:
-            self._error_dialog_idle(e)
-
-    def _set_buttons_sensitive_idle(self, sensitive):
-        GLib.idle_add(self._set_buttons_sensitive, sensitive)
-        self._main_view.set_buttons_sensitive_idle(sensitive)
-
-    def _set_buttons_sensitive(self, sensitive):
-        actions_names = ['search',
-                         'syncronize',
-                         'upload',
-                         'download',
-                         'scanfiles',
-                         'accounts',
-                         'play_next',
-                         'play_random',
-                         'episode_add',
-                         'episode_remove',
-                         'delete',
-                         'copy']
-
-        for action_name in actions_names:
-            action = self.lookup_action(action_name)
-
-            if action is not None:
-                action.set_enabled(sensitive)

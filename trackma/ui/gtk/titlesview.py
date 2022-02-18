@@ -14,22 +14,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import GObject
+import os
 
+from gi.repository import Gtk
+from trackma.ui.gtk import gtk_dir
 
-class ShowEventType(GObject.GEnum):
-    NONE = 0
-    DETAILS = 1
-    OPEN_WEBSITE = 2
-    OPEN_FOLDER = 3
-    COPY_TITLE = 4
-    CHANGE_ALTERNATIVE_TITLE = 5
-    REMOVE = 6
-    PLAY_NEXT = 7
-    PLAY_EPISODE = 8
-    PLAY_RANDOM = 9
-    EPISODE_ADD = 10
-    EPISODE_SET = 11
-    EPISODE_REMOVE = 12
-    SET_SCORE = 13
-    SET_STATUS = 14
+@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/titlesview.ui'))
+class TrackmaTitlesView(Gtk.Box):
+
+    __gtype_name__ = 'TrackmaTitlesView'
+
+    def __init__(self):
+        ''' Trackma Titles View
+        '''
+
+        super().__init__()

@@ -16,7 +16,7 @@
 
 import os
 from typing import NamedTuple
-from gi.repository import GObject
+from gi.repository import GObject, GLib
 gtk_dir = os.path.dirname(__file__)
 
 def main():
@@ -31,224 +31,25 @@ def main():
     app = TrackmaApplication()
     sys.exit(app.run(sys.argv))
 
-class ColumnDescription(NamedTuple):
-    name: str
-    description: str
-    type: type
-    is_available: bool
-    order: int
+class GtkUtils(object):
+    @staticmethod
+    def create_option_entry(option):
+        entry = GLib.OptionEntry()
+        entry.long_name = option['long_name']
+        entry.short_name = option['short_name']
+        entry.flags = option['flags']
+        entry.arg = option['arg']
+        entry.arg_data = option['arg_data']
+        entry.description = option['description']
+        entry.arg_description = option['arg_description']
+        return entry
 
-class TrackmaColumns(object):
-
-    @property
-    def ID(self):
-        return ColumnDescription(
-            name='id',
-            description=None,
-            type=int,
-            is_available=False,
-            order=0
-        )
-
-    @property
-    def TITLE(self):
-        return ColumnDescription(
-            name='title',
-            description='Title',
-            type=str,
-            is_available=True,
-            order=1
-        )
-
-    @property
-    def PROGRESS(self):
-        return ColumnDescription(
-            name='progress',
-            description='Progress',
-            type=int,
-            is_available=True,
-            order=2
-        )
-
-    @property
-    def SCORE(self):
-        return ColumnDescription(
-            name='score',
-            description='Score',
-            type=float,
-            is_available=True,
-            order=3
-        )
-
-    @property
-    def STAT_TEXT(self):
-        return ColumnDescription(
-            name='stat-text',
-            description=None,
-            type=str,
-            is_available=False,
-            order=4
-        )
-
-    @property
-    def SCORE_TEXT(self):
-        return ColumnDescription(
-        name='score-text',
-        description=None,
-        type=str,
-        is_available=False,
-        order=5
-    )
-
-    @property
-    def TOTAL_EPISODES(self):
-        return ColumnDescription(
-            name='total-episodes',
-            description=None,
-            type=int,
-            is_available=False,
-            order=6
-        )
-
-    @property
-    def SUBVALUE(self):
-        return ColumnDescription(
-        name='subvalue',
-        description=None,
-        type=int,
-        is_available=False,
-        order=7
-    )
-
-    @property
-    def AVAILABLE_EPISODES(self):
-        return ColumnDescription(
-            name='available-episodes',
-            description=None,
-            type=GObject.TYPE_PYOBJECT,
-            is_available=False,
-            order=8
-        )
-
-    @property
-    def COLOR(self):
-        return ColumnDescription(
-        name='color',
-        description=None,
-        type=str,
-        is_available=False,
-        order=9
-    )
-
-    @property
-    def STAT_PERCENTAGE(self):
-        return ColumnDescription(
-            name='stat-percentage',
-            description='Percent',
-            type=int,
-            is_available=True,
-            order=10
-        )
-
-    @property
-    def START(self):
-        return ColumnDescription(
-            name='start',
-            description='Start',
-            type=str,
-            is_available=True,
-            order=11
-        )
-
-    @property
-    def END(self):
-        return ColumnDescription(
-            name='end',
-            description='End',
-            type=str,
-            is_available=True,
-            order=12
-        )
-
-    @property
-    def MY_START(self):
-        return ColumnDescription(
-            name='my-start',
-            description='My start',
-            type=str,
-            is_available=True,
-            order=13
-        )
-
-    @property
-    def MY_END(self):
-        return ColumnDescription(
-            name='my-end',
-            description='My end',
-            type=str,
-            is_available=True,
-            order=14
-        )
-
-    @property
-    def MY_STATUS(self):
-        return ColumnDescription(
-            name='my-status',
-            description=None,
-            type=int,
-            is_available=False,
-            order=15
-        )
-
-    @property
-    def STATUS(self):
-        return ColumnDescription(
-            name='status',
-            description=None,
-            type=int,
-            is_available=False,
-            order=16
-        )
-
-    @property
-    def ALL_COLUMNS(self):
-        return (
-            self.ID,
-            self.TITLE,
-            self.PROGRESS,
-            self.SCORE,
-            self.STAT_TEXT,
-            self.SCORE_TEXT,
-            self.TOTAL_EPISODES,
-            self.SUBVALUE,
-            self.AVAILABLE_EPISODES,
-            self.COLOR,
-            self.STAT_PERCENTAGE,
-            self.START,
-            self.END,
-            self.MY_START,
-            self.MY_END,
-            self.MY_STATUS,
-            self.STATUS
-        )
-
-    @property
-    def AVAILABLE_COLUMNS(self):
-        return (col for col in self.ALL_COLUMNS if col.is_available)
-
-class TrackmaShowAction(object):
-    DETAILS = 'details'
-    OPEN_WEBSITE = 'open-website'
-    OPEN_FOLDER = 'open-folder'
-    COPY_TITLE = 'copy-title'
-    CHANGE_ALTERNATIVE_TITLE = 'change-alternative-title'
-    REMOVE = 'remove'
-    PLAY_NEXT = 'play-next'
-    PLAY_EPISODE = 'play-episode'
-    PLAY_RANDOM = 'play-random'
-    EPISODE_ADD = 'episode-add'
-    EPISODE_SET = 'episode-set'
-    EPISODE_REMOVE = 'episode-remove'
-    SET_SCORE = 'set-score'
-    SET_STATUS = 'set-status'
-
+    def from_variant(value: GLib.Variant):
+        if value is None:
+            return None
+        if VARIANT_TYPE_INT64.equal(value.get_type()):
+            return value.get_int64()
+        if VARIANT_TYPE_TUPLE.equal(value.get_type()):
+            return (value.get_child_value(0).get_int64(), value.get_child_value(1).get_int64())
+        else:
+            raise ValueError(f'No mapping declared for value {value}')
