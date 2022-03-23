@@ -10,42 +10,14 @@
         <property name="vexpand">1</property>
         <property name="can-unfold">0</property>
         <child>
-          <object class="GtkBox" id="home">
-            <property name="orientation">vertical</property>
-            <child>
-              <object class="AdwHeaderBar" id="home_header_bar">
-                <child type="end">
-                  <object class="GtkMenuButton" id="home_menu_button">
-                    <property name="valign">center</property>
-                    <property name="menu_model">homemenu</property>
-                    <property name="icon_name">open-menu-symbolic</property>
-                    <property name="direction">none</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="AdwStatusPage">
-                <property name="title" translatable="yes">Accounts list</property>
-                <!-- <property name="description" translatable="yes">Please add one account to begin</property> -->
-                <property name="vexpand">True</property>
-                <child>
-                  <object class="GtkButton">
-                    <property name="label" translatable="yes">Add account</property>
-                    <property name="action-name">account.add</property>
-                    <property name="halign">center</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
           <object class="TrackmaAccountsView" id="accounts_view" />
         </child>
-	<child>
-	  <object class="TrackmaNewAccountView" id="new_account_view" />
-	</child>
+	      <child>
+	        <object class="TrackmaProvidersView" id="providers_view" />
+	      </child>
+        <child>
+          <object class="TrackmaNewAccountView" id="new_account_view" />
+        </child>
         <child>
           <object class="TrackmaTitlesView" id="titles_view" />
         </child>

@@ -7,7 +7,7 @@
         <child type="start">
           <object class="GtkButton" id="back_button">
             <property name="icon-name">go-previous-symbolic</property>
-            <property name="action-name">win.home</property>
+            <property name="action-name">win.accounts</property>
           </object>
         </child>
         <child type="end">

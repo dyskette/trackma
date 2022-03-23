@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="TrackmaProviderRow" parent="AdwActionRow">
+    <property name="activatable">True</property>
+
+    <!-- Logo -->
+    <child type="prefix">
+      <object class="GtkPicture" id="provider_logo">
+        <property name="margin-top">9</property>
+        <property name="margin-bottom">9</property>
+      </object>
+    </child>
+
+    <!-- Arrow -->
+    <child type="suffix">
+      <object class="GtkImage" id="arrow">
+        <!-- <property name="visible" bind-source="CcListRow" bind-property="show-arrow" bind-flags="sync-create"/> -->
+        <property name="valign">center</property>
+        <property name="icon-name">go-next-symbolic</property>
+      </object>
+    </child>
+  </template>
+</interface>

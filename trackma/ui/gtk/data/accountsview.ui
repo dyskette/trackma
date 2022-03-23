@@ -3,71 +3,145 @@
   <template class="TrackmaAccountsView" parent="GtkBox">
     <property name="orientation">vertical</property>
     <child>
-      <object class="AdwHeaderBar" id="accounts_header_bar">
-        <child type="start">
-          <object class="GtkButton" id="new_account_button">
+      <object class="AdwViewStack" id="view_stack">
+
+        <child>
+          <object class="AdwViewStackPage">
+            <property name="name">welcome-page</property>
+
             <property name="child">
-              <object class="AdwButtonContent">
-                <property name="icon-name">list-add-symbolic</property>
-                <property name="label" translatable="yes">_New</property>
-                <property name="use-underline">True</property>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+
+                <child>
+                  <object class="AdwHeaderBar" />
+                </child>
+
+                <child>
+                  <object class="AdwStatusPage">
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="icon_name">semi-starred-symbolic</property>
+
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="valign">start</property>
+                        <property name="orientation">vertical</property>
+
+                        <child>
+                          <object class="GtkPicture">
+                            <property name="can-shrink">True</property>
+                            <property name="keep-aspect-ratio">True</property>
+                            <property name="file">resource:///org/gnome/Music/icons/welcome-music.svg</property>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="justify">center</property>
+                            <property name="label" translatable="yes">Welcome to Trackma</property>
+                            <style>
+                              <class name="large-title"/>
+                            </style>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="GtkButton">
+                            <property name="margin-top">18</property>
+                            <property name="margin-bottom">18</property>
+                            <property name="halign">center</property>
+                            <property name="label">Add an account</property>
+                            <property name="action-name">win.providers</property>
+                          </object>
+                        </child>
+
+                      </object>
+                    </property>
+
+                  </object>
+                </child>
+
               </object>
             </property>
-            <property name="action-name">win.new-account</property>
+
           </object>
         </child>
-        <child type="end">
-          <object class="GtkMenuButton" id="menu_button">
-            <property name="valign">center</property>
-            <property name="menu_model">viewmenu</property>
-            <property name="icon_name">open-menu-symbolic</property>
-            <property name="direction">none</property>
-          </object>
-        </child>
-      </object>
-    </child>
-    <child>
-      <object class="AdwStatusPage">
-        <property name="vexpand">True</property>
+
         <child>
-          <object class="GtkBox">
-            <property name="vexpand">True</property>
-            <property name="orientation">vertical</property>
-            <property name="margin-start">32</property>
-            <property name="margin-end">32</property>
-            <property name="margin-top">18</property>
-            <property name="margin-bottom">18</property>
-            <property name="spacing">12</property>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Available accounts</property>
-                <property name="halign">start</property>
-                <style>
-                  <class name="heading"/>
-                </style>
+          <object class="AdwViewStackPage">
+            <property name="name">accounts-page</property>
+
+            <property name="child">
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+
+                <child>
+                  <object class="AdwHeaderBar">
+
+                    <child type="start">
+                      <object class="GtkButton" id="new_account_button">
+                        <property name="action-name">win.providers</property>
+
+                        <property name="child">
+                          <object class="AdwButtonContent">
+                            <property name="icon-name">list-add-symbolic</property>
+                            <property name="label" translatable="yes">_New</property>
+                            <property name="use-underline">True</property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+
+                    <child type="end">
+                      <object class="GtkMenuButton" id="menu_button">
+                        <property name="valign">center</property>
+                        <property name="menu-model">viewmenu</property>
+                        <property name="icon-name">open-menu-symbolic</property>
+                        <property name="direction">none</property>
+                      </object>
+                    </child>
+
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwClamp">
+                    <property name="margin-top">24</property>
+                    <property name="margin-bottom">24</property>
+
+                    <property name="child">
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Available accounts</property>
+
+                        <child>
+                          <object class="GtkListBox" id="accounts_list">
+                              <property name="selection-mode">none</property>
+                              <style>
+                                <class name="boxed-list"/>
+                              </style>
+                              <!-- Here goes the AccountRows -->
+                          </object>
+                        </child>
+
+                      </object>
+                    </property>
+
+                  </object>
+                </child>
+
               </object>
-            </child>
-            <child>
-              <object class="GtkListBox" id="accounts_list">
-                  <property name="selection-mode">none</property>
-                  <style>
-                    <class name="boxed-list"/>
-                  </style>
-                  <!-- Here goes the AccountRows -->
-              </object>
-            </child>
+            </property>
+
           </object>
         </child>
+
       </object>
     </child>
   </template>
 
   <menu id="viewmenu">
     <section>
-      <item>
-        <attribute name="action">win.preferences</attribute>
-        <attribute name="label" translatable="yes">Preferences</attribute>
-      </item>
       <item>
         <attribute name="action">win.show-help-overlay</attribute>
         <attribute name="label" translatable="yes">Keyboard Shortcuts</attribute>

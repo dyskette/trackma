@@ -17,18 +17,21 @@
 import logging
 import os
 
-from gi.repository import Gtk, Gio
+from gi.repository import Gtk, Gio, GLib, GObject
 from loguru import logger
 from trackma import utils
 from trackma.accounts import AccountManager
 from trackma.ui.gtk import gtk_dir
+from trackma.ui.gtk.accountdescription import AccountDescription
 from trackma.ui.gtk.accountrow import TrackmaAccountRow
+from trackma.ui.gtk.providerdescription import ProviderDescription
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/accountsview.ui'))
 class TrackmaAccountsView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaAccountsView'
 
+    view_stack = Gtk.Template.Child()
     accounts_list = Gtk.Template.Child()
     new_account_button = Gtk.Template.Child()
 
@@ -36,33 +39,55 @@ class TrackmaAccountsView(Gtk.Box):
         ''' Trackma Accounts View class
         '''
         super().__init__()
+        self._model = Gio.ListStore.new(AccountDescription)
+        self.accounts_list.bind_model(self._model, self._create_account_row)
 
     def refresh(self):
         ''' Refresh the list of accounts
         '''
-        # Remove anything leftover...
-        while self.accounts_list.get_row_at_index(0) is not None:
-            row = self.accounts_list.remove(self.accounts_list.get_row_at_index(0))
+        # Reset state...
+        self._model.remove_all()
 
-        # Adding everything...
-        for i, account in AccountManager().get_accounts():
-            if type(account) is not dict:
-                logger.warning('Cannot read account entry {}, is type {}', i, type(account))
+        # Add everything...
+        for i, account_dict in AccountManager().get_accounts():
+            account = AccountDescription(i)
+
+            if not account:
                 continue
 
-            api = utils.available_libs[account['api']] if account['api'] in utils.available_libs else None
+            self._model.append(account)
 
-            if api is None:
-                logger.bind(**account).warning('Account has unsupported api')
-                continue
+        if self._model.get_n_items() > 0:
+            self.view_stack.set_visible_child_name('accounts-page')
+        else:
+            self.view_stack.set_visible_child_name('welcome-page')
 
-            log = logger.bind(**{x: account[x] for x in account if x != 'password'})
-            log.debug('Setting up row for account')
+    def remove_account(self, action: Gio.SimpleAction, account_index: GLib.Variant, user_data=None) -> None:
+        ''' Callback for remove account action
+        '''
+        window = Gio.Application.get_default().get_active_window()
+        dialog = Gtk.MessageDialog(
+            transient_for=window,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text='Remove account?',
+            secondary_text='This action will remove your account from Trackma. You can login again later.')
+        dialog.add_button('_Cancel', -1)
+        dialog.add_button('_Accept', 0)
 
-            row = TrackmaAccountRow(
-                id=i,
-                username=account['username'],
-                libname=api[0],
-                libimagepath='{0}/{1}-logo.png'.format(utils.DATADIR, account['api']))
+        def on_response(_dialog: Gtk.MessageDialog, response_id: int, user_data=None) -> None:
+            ''' Callback for response dialog signal
+            '''
+            if response_id == 0:
+                AccountManager().delete_account(account_index.get_int32())
+                self.refresh()
 
-            self.accounts_list.append(row)
+            dialog.close()
+
+        dialog.connect('response', on_response)
+        dialog.show()
+
+    def _create_account_row(self, account):
+        return TrackmaAccountRow(account)

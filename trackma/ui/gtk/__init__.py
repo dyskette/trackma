@@ -31,6 +31,23 @@ def main():
     app = TrackmaApplication()
     sys.exit(app.run(sys.argv))
 
+def from_variant(value: GLib.Variant) -> any:
+    ''' Get python real value from a GLib.Variant type
+    '''
+    glib_type_getters = {
+        'd': GLib.Variant.get_double,
+        'b': GLib.Variant.get_boolean,
+        'x': GLib.Variant.get_int64,
+        's': GLib.Variant.get_string,
+    }
+
+    if value is None:
+        return None
+    elif value.get_type() not in glib_type_getters.keys():
+        raise ValueError(f'No mapping declared for value {value}')
+    else:
+        return glib_type_getters[value.get_type()](value)
+
 class GtkUtils(object):
     @staticmethod
     def create_option_entry(option):
@@ -44,12 +61,3 @@ class GtkUtils(object):
         entry.arg_description = option['arg_description']
         return entry
 
-    def from_variant(value: GLib.Variant):
-        if value is None:
-            return None
-        if VARIANT_TYPE_INT64.equal(value.get_type()):
-            return value.get_int64()
-        if VARIANT_TYPE_TUPLE.equal(value.get_type()):
-            return (value.get_child_value(0).get_int64(), value.get_child_value(1).get_int64())
-        else:
-            raise ValueError(f'No mapping declared for value {value}')

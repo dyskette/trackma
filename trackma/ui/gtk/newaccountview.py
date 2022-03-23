@@ -16,55 +16,95 @@
 
 import os
 
-from gi.repository import Gtk, Gio, GObject
+from gi.repository import Adw, Gtk, Gdk, Gio, GLib, GObject
 from loguru import logger
 from trackma import utils
+from trackma.accounts import AccountManager
 from trackma.ui.gtk import gtk_dir
-
-class ProviderDescription():
-    def __init__(self, libname: str, libimagepath: str):
-        ''' Provider Description
-        '''
-        self.libname = libname
-        self.libimagepath = libimagepath
-
-class TrackmaProviderRow(Gtk.ListBoxRow):
-
-    __gtype_name__ = 'TrackmaProviderRow'
-
-    def __init__(self, provider: ProviderDescription):
-        ''' Trackma Provider Row
-        '''
-        super().__init__()
-        self.provider = provider
+from trackma.ui.gtk.providerdescription import ProviderDescription
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/newaccountview.ui'))
 class TrackmaNewAccountView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaNewAccountView'
 
-    offline_label = Gtk.Template.Child()
-    providers_listbox = Gtk.Template.Child()
+    save_button = Gtk.Template.Child()
+    stack = Gtk.Template.Child()
+    standard_username = Gtk.Template.Child()
+    standard_password = Gtk.Template.Child()
+    oauth_username = Gtk.Template.Child()
+    oauth_pin = Gtk.Template.Child()
+    oauth_pin_url = Gtk.Template.Child()
+    oauth_pin_url_image = Gtk.Template.Child()
 
     def __init__(self):
-        ''' Trackma New Account class
+        ''' Trackma New Account View class
         '''
         super().__init__()
+        self.oauth_pin_url_image.set_from_file(os.path.join(gtk_dir, 'data/icons/external-link-symbolic.svg'))
 
-        for (libname, api) in sorted(utils.available_libs.items()):
-            logger.bind(libname=libname, api=api).debug('Appending library')
-            self.providers_listbox.append(TrackmaProviderRow(ProviderDescription(
-                libname=api[0],
-                libimagepath=f'{utils.DATADIR}/{libname}-logo.png'
-                )))
-
-        monitor = Gio.NetworkMonitor.get_default()
-        monitor.connect('network-changed', self._on_network_changed)
-
-    def _on_network_changed(self, monitor: Gio.NetworkMonitor, available: bool) -> None:
-        ''' Change widgets based on network status
+    def prepare_for(self, libname: str) -> bool:
+        ''' Prepare the new account view for the library specified
         '''
-        logger.info('Network status changed to {}', Gio.NetworkConnectivity(monitor.props.connectivity).value_nick)
+        self.provider = ProviderDescription(libname)
 
-        self.offline_label.set_visible(available)
-        self.providers_listbox.set_sensitive(available)
+        if not self.provider:
+            return False
+
+        self.clear_all_fields()
+
+        if self.provider.is_oauth():
+            self.auth = self.provider.get_auth()
+
+            if self.auth is not None:
+                self.oauth_pin_url.set_subtitle(GLib.markup_escape_text(self.auth.url))
+
+            self.stack.set_visible_child_name('oauth-page')
+        else:
+            self.stack.set_visible_child_name('password-page')
+
+        return True
+
+    def clear_all_fields(self) -> None:
+        ''' Clear all fields in the view
+        '''
+        self.standard_username.set_text('')
+        self.standard_password.set_text('')
+        self.oauth_username.set_text('')
+        self.oauth_pin.set_text('')
+
+    @Gtk.Template.Callback()
+    def on_pin_url_activated(self, row: Adw.ActionRow) -> None:
+        Gtk.show_uri(Gio.Application.get_default().get_active_window(), self.auth.url, Gdk.CURRENT_TIME)
+
+    @Gtk.Template.Callback()
+    def on_entry_changed(self, entry: Gtk.Entry, user_data=None) -> None:
+        ''' Callback for changed signal for all entries in the view
+        '''
+        has_content = False
+
+        if self.provider.is_oauth():
+            has_content = len(self.oauth_username.get_text()) > 0 and len(self.oauth_pin.get_text()) > 0
+        else:
+            has_content = len(self.standard_username.get_text()) > 0 and len(self.standard_password.get_text()) > 0
+
+        self.save_button.set_sensitive(has_content)
+
+    @Gtk.Template.Callback()
+    def on_save_button_clicked(self, button: Gtk.Button, user_data=None) -> None:
+        logger.debug('Save button clicked')
+
+        if self.provider.is_oauth():
+            AccountManager().add_account(
+                self.oauth_username.get_text().strip(),
+                self.oauth_pin.get_text(),
+                self.provider.name,
+                { 'code_verifier': self.auth.code_verifier })
+        else:
+            AccountManager().add_account(
+                self.standard_username.get_text().strip(),
+                self.standard_password.get_text(),
+                self.provider.name,
+                {})
+
+        self.activate_action('win.accounts')

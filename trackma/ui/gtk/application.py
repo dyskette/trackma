@@ -30,8 +30,10 @@ class TrackmaApplication(Adw.Application):
     __gtype_name__ = 'TrackmaApplication'
 
     def __init__(self):
+        ''' Trackma Application
+        '''
         super().__init__(
-            application_id='com.github.z411.TrackmaGtk.Devel',
+            application_id='com.github.z411.TrackmaGtk.Devel', # TODO: Remove devel
             flags=Gio.ApplicationFlags.NON_UNIQUE
         )
 
@@ -73,15 +75,21 @@ class TrackmaApplication(Adw.Application):
         self._register_options()
         self._register_actions()
 
-    def do_startup(self):
+    def do_startup(self) -> None:
+        ''' Callback for startup signal emitted on the primary instance immediately after registration
+        '''
         Adw.Application.do_startup(self)
         self._register_accelerators()
 
-    def do_activate(self):
+    def do_activate(self) -> None:
+        ''' Callback for activate signal emitted when activation occurs
+        '''
         self._create_window()
         self._window.present()
 
     def do_handle_local_options(self, options: GLib.VariantDict) -> int:
+        ''' Callback for handle-local-options signal emitted on the local instance after the parsing of the commandline options has occurred
+        '''
         if options.contains('debug'):
             self.log_level = 'DEBUG'
 
@@ -94,21 +102,21 @@ class TrackmaApplication(Adw.Application):
         logger.add(sys.stdout, format=format, level=self.log_level, colorize=True)
         return -1
 
-    def _create_window(self):
+    def _create_window(self) -> None:
         if not self._window:
             self._window = TrackmaWindow(self)
 
-    def _on_quit_activate(self, action, parameter, user_data):
-        self._window.quit()
+    def _on_quit_activate(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
+        self.quit()
 
-    def _register_options(self):
+    def _register_options(self) -> None:
         entries = [GtkUtils.create_option_entry(option) for option in self._app_options]
         self.add_main_option_entries(entries)
 
-    def _register_actions(self):
+    def _register_actions(self) -> None:
         Gio.ActionMap.add_action_entries(self, self._app_actions)
 
-    def _register_accelerators(self):
+    def _register_accelerators(self) -> None:
         for accel in self._window_accelerators:
             self.set_accels_for_action(accel['action'], accel['accels'])
 
