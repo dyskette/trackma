@@ -56,12 +56,14 @@
 
             <property name="child">
               <object class="AdwClamp">
-                <property name="margin-top">24</property>
-                <property name="margin-bottom">24</property>
 
                 <property name="child">
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>
+                    <property name="margin-top">24</property>
+                    <property name="margin-bottom">24</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
 
                     <child>
                       <object class="AdwPreferencesGroup">
@@ -126,12 +128,14 @@
 
             <property name="child">
               <object class="AdwClamp">
-                <property name="margin-top">24</property>
-                <property name="margin-bottom">24</property>
 
                 <property name="child">
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>
+                    <property name="margin-top">24</property>
+                    <property name="margin-bottom">24</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
 
                     <child>
                       <object class="AdwPreferencesGroup">
@@ -167,8 +171,8 @@
                                 <signal name="activated" handler="on_pin_url_activated" />
 
                                 <child type="suffix">
-                                  <object class="GtkImage" id="oauth_pin_url_image">
-                                    <property name="icon-name">insert-link-symbolic</property>
+                                  <object class="GtkImage">
+                                    <property name="icon-name">external-link-symbolic</property>
                                     <style>
                                       <class name="dim-label" />
                                     </style>

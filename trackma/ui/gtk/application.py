@@ -20,11 +20,11 @@ import sys
 gi.require_version('Gtk', '4.0')  # nopep8
 gi.require_version('Adw', '1')  # nopep8
 
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from loguru import logger
 from trackma import utils
-from trackma.ui.gtk import GtkUtils
+from trackma.ui.gtk import create_option_entry, get_resource_path
 from trackma.ui.gtk.window import TrackmaWindow
-from gi.repository import GLib, Gio, Adw
 
 class TrackmaApplication(Adw.Application):
     __gtype_name__ = 'TrackmaApplication'
@@ -75,6 +75,10 @@ class TrackmaApplication(Adw.Application):
         self._register_options()
         self._register_actions()
 
+        display = Gdk.Display.get_default()
+        icon_theme = Gtk.IconTheme.get_for_display(display)
+        icon_theme.add_search_path(get_resource_path('icons'))
+
     def do_startup(self) -> None:
         ''' Callback for startup signal emitted on the primary instance immediately after registration
         '''
@@ -110,7 +114,7 @@ class TrackmaApplication(Adw.Application):
         self.quit()
 
     def _register_options(self) -> None:
-        entries = [GtkUtils.create_option_entry(option) for option in self._app_options]
+        entries = [create_option_entry(option) for option in self._app_options]
         self.add_main_option_entries(entries)
 
     def _register_actions(self) -> None:

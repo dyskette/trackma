@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import logging
-
 from gi.repository import GObject
 from loguru import logger
 from trackma.accounts import AccountManager

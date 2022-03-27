@@ -14,26 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import logging
-import os
-
-from gi.repository import Gtk, Gio, GLib, GObject
-from loguru import logger
-from trackma import utils
+from gi.repository import Adw, Gio, GLib, Gtk
 from trackma.accounts import AccountManager
-from trackma.ui.gtk import gtk_dir
+from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountdescription import AccountDescription
 from trackma.ui.gtk.accountrow import TrackmaAccountRow
-from trackma.ui.gtk.providerdescription import ProviderDescription
 
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/accountsview.ui'))
+@Gtk.Template.from_file(get_resource_path('accountsview.ui'))
 class TrackmaAccountsView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaAccountsView'
 
-    view_stack = Gtk.Template.Child()
-    accounts_list = Gtk.Template.Child()
-    new_account_button = Gtk.Template.Child()
+    view_stack: Adw.ViewStack = Gtk.Template.Child()
+    accounts_list: Gtk.ListBox = Gtk.Template.Child()
+    new_account_button: Gtk.Button = Gtk.Template.Child()
 
     def __init__(self):
         ''' Trackma Accounts View class
@@ -41,6 +35,7 @@ class TrackmaAccountsView(Gtk.Box):
         super().__init__()
         self._model = Gio.ListStore.new(AccountDescription)
         self.accounts_list.bind_model(self._model, self._create_account_row)
+
 
     def refresh(self):
         ''' Refresh the list of accounts

@@ -2,78 +2,37 @@
 <interface>
   <template class="TrackmaTitlesView" parent="GtkBox">
     <property name="orientation">vertical</property>
-    <child>
-      <object class="AdwHeaderBar" id="header_bar">
-        <child type="start">
-          <object class="GtkButton" id="back_button">
-            <property name="icon-name">go-previous-symbolic</property>
-            <property name="action-name">win.accounts</property>
-          </object>
-        </child>
-        <child type="end">
-          <object class="GtkMenuButton" id="menu_button">
-            <property name="valign">center</property>
-            <property name="menu-model">viewmenu</property>
-            <property name="icon-name">open-menu-symbolic</property>
-            <property name="direction">none</property>
-          </object>
-        </child>
-      </object>
-    </child>
-    <child>
-      <object class="AdwStatusPage">
-        <property name="vexpand">True</property>
-        <child>
-          <object class="GtkBox">
-            <property name="vexpand">True</property>
-            <property name="orientation">vertical</property>
-            <property name="margin-start">32</property>
-            <property name="margin-end">32</property>
-            <property name="margin-top">18</property>
-            <property name="margin-bottom">18</property>
-            <property name="spacing">12</property>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Available titles</property>
-                <property name="halign">start</property>
-                <style>
-                  <class name="heading"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <object class="GtkListBox" id="accounts_list">
-                  <property name="selection-mode">none</property>
-                  <style>
-                    <class name="boxed-list"/>
-                  </style>
-                  <!-- Here goes the AccountRows -->
-              </object>
-            </child>
-          </object>
-        </child>
-      </object>
-    </child>
-  </template>
 
-  <menu id="viewmenu">
-    <section>
-      <item>
-        <attribute name="action">win.preferences</attribute>
-        <attribute name="label" translatable="yes">Preferences</attribute>
-      </item>
-      <item>
-        <attribute name="action">win.show-help-overlay</attribute>
-        <attribute name="label" translatable="yes">Keyboard Shortcuts</attribute>
-      </item>
-      <item>
-        <attribute name="action">win.about</attribute>
-        <attribute name="label" translatable="yes">About Trackma</attribute>
-      </item>
-      <item>
-        <attribute name="action">app.quit</attribute>
-        <attribute name="label" translatable="yes">Quit</attribute>
-      </item>
-    </section>
-  </menu>
+    <child>
+      <object class="AdwLeaflet" id="leaflet">
+        <property name="can-navigate-back">True</property>
+
+        <child>
+          <object class="AdwLeafletPage">
+            <property name="child">
+              <object class="TrackmaTitlesList" id="titles_list" />
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwLeafletPage">
+            <property name="navigatable">False</property>
+            <property name="child">
+              <object class="GtkSeparator"/>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwLeafletPage">
+            <property name="child">
+              <object class="TrackmaTitleDetails" id="title_details" />
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+  </template>
 </interface>

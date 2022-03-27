@@ -14,34 +14,29 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
-
-from gi.repository import Adw, Gtk, Gdk, Gio, GLib, GObject
+from gi.repository import Adw, Gtk, Gdk, Gio, GLib
 from loguru import logger
-from trackma import utils
 from trackma.accounts import AccountManager
-from trackma.ui.gtk import gtk_dir
+from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.providerdescription import ProviderDescription
 
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/newaccountview.ui'))
+@Gtk.Template.from_file(get_resource_path('newaccountview.ui'))
 class TrackmaNewAccountView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaNewAccountView'
 
-    save_button = Gtk.Template.Child()
-    stack = Gtk.Template.Child()
-    standard_username = Gtk.Template.Child()
-    standard_password = Gtk.Template.Child()
-    oauth_username = Gtk.Template.Child()
-    oauth_pin = Gtk.Template.Child()
-    oauth_pin_url = Gtk.Template.Child()
-    oauth_pin_url_image = Gtk.Template.Child()
+    save_button: Gtk.Button = Gtk.Template.Child()
+    stack: Adw.ViewStack = Gtk.Template.Child()
+    standard_username: Gtk.Entry = Gtk.Template.Child()
+    standard_password: Gtk.Entry = Gtk.Template.Child()
+    oauth_username: Gtk.Entry = Gtk.Template.Child()
+    oauth_pin: Gtk.Entry = Gtk.Template.Child()
+    oauth_pin_url: Adw.ActionRow = Gtk.Template.Child()
 
     def __init__(self):
         ''' Trackma New Account View class
         '''
         super().__init__()
-        self.oauth_pin_url_image.set_from_file(os.path.join(gtk_dir, 'data/icons/external-link-symbolic.svg'))
 
     def prepare_for(self, libname: str) -> bool:
         ''' Prepare the new account view for the library specified

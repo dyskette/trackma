@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="TrackmaTitleRow" parent="GtkListBoxRow">
+    <child>
+      <object class="GtkBox">
+
+        <child>
+          <object class="GtkBox">
+            <property name="width-request">40</property>
+            <property name="halign">center</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+            <property name="margin-top">6</property>
+            <property name="margin-bottom">6</property>
+
+            <child type="suffix">
+              <object class="GtkImage" id="arrow">
+                <!-- <property name="visible" bind-source="CcListRow" bind-property="show-arrow" bind-flags="sync-create"/> -->
+                <property name="valign">center</property>
+                <property name="icon-name">go-next-symbolic</property>
+              </object>
+            </child>
+          </object>
+        </child>
+
+
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="vexpand">True</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+            <property name="margin-top">6</property>
+            <property name="margin-bottom">6</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="halign">start</property>
+                <property name="width-chars">20</property>
+                <property name="width-request">60</property>
+                <property name="wrap">True</property>
+                <property name="label">Testiiing asdf sadf asdlf ksdlfksjd lfksjdf lksj dflkjas fas</property>
+                <attributes>
+                  <attribute name="weight" value="bold"/>
+                </attributes>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+
+              </object>
+            </child>
+          </object>
+        </child>
+
+      </object>
+    </child>
+  </template>
+</interface>

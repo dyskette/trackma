@@ -14,20 +14,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
-
 from gi.repository import Adw, GLib, Gtk
-from loguru import logger
-from trackma.ui.gtk import gtk_dir
+from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountdescription import AccountDescription
 
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/accountrow.ui'))
+@Gtk.Template.from_file(get_resource_path('accountrow.ui'))
 class TrackmaAccountRow(Adw.ActionRow):
 
     __gtype_name__ = 'TrackmaAccountRow'
 
-    account_logo = Gtk.Template.Child()
-    remove_button = Gtk.Template.Child()
+    account_logo: Gtk.Picture = Gtk.Template.Child()
 
     def __init__(self, account: AccountDescription):
         super().__init__()

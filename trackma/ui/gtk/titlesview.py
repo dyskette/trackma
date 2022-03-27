@@ -14,18 +14,29 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
+from gi.repository import Adw, GObject, Gtk
+from loguru import logger
+from trackma.ui.gtk import get_resource_path
+from trackma.ui.gtk.titledetails import TrackmaTitleDetails
+from trackma.ui.gtk.titleslist import TrackmaTitlesList
 
-from gi.repository import Gtk
-from trackma.ui.gtk import gtk_dir
-
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/titlesview.ui'))
+@Gtk.Template.from_file(get_resource_path('titlesview.ui'))
 class TrackmaTitlesView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaTitlesView'
 
+    leaflet: Adw.Leaflet = Gtk.Template.Child()
+    titles_list: TrackmaTitlesList = Gtk.Template.Child()
+    title_details: TrackmaTitleDetails = Gtk.Template.Child()
+
     def __init__(self):
         ''' Trackma Titles View
         '''
-
         super().__init__()
+
+        self.leaflet.bind_property('folded',
+            self.titles_list.header_bar, 'show-end-title-buttons',
+            GObject.BindingFlags.DEFAULT)
+        self.leaflet.bind_property('folded',
+            self.title_details.back_button, 'visible',
+            GObject.BindingFlags.DEFAULT)

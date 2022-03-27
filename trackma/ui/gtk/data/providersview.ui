@@ -39,6 +39,8 @@
       <object class="AdwClamp">
         <property name="margin-top">24</property>
         <property name="margin-bottom">24</property>
+        <property name="margin-start">12</property>
+        <property name="margin-end">12</property>
         <property name="child">
           <object class="GtkBox">
             <property name="orientation">vertical</property>

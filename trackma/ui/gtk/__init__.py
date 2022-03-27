@@ -31,6 +31,11 @@ def main():
     app = TrackmaApplication()
     sys.exit(app.run(sys.argv))
 
+def get_resource_path(ending: str) -> str:
+    ''' Get gtk resource path
+    '''
+    return os.path.join(os.path.dirname(__file__), 'data', ending)
+
 def from_variant(value: GLib.Variant) -> any:
     ''' Get python real value from a GLib.Variant type
     '''
@@ -48,16 +53,16 @@ def from_variant(value: GLib.Variant) -> any:
     else:
         return glib_type_getters[value.get_type()](value)
 
-class GtkUtils(object):
-    @staticmethod
-    def create_option_entry(option):
-        entry = GLib.OptionEntry()
-        entry.long_name = option['long_name']
-        entry.short_name = option['short_name']
-        entry.flags = option['flags']
-        entry.arg = option['arg']
-        entry.arg_data = option['arg_data']
-        entry.description = option['description']
-        entry.arg_description = option['arg_description']
-        return entry
+def create_option_entry(option: dict) -> GLib.OptionEntry:
+    ''' Create a GLib.OptionEntry using a dictionary description
+    '''
+    entry = GLib.OptionEntry()
+    entry.long_name = option['long_name']
+    entry.short_name = option['short_name']
+    entry.flags = option['flags']
+    entry.arg = option['arg']
+    entry.arg_data = option['arg_data']
+    entry.description = option['description']
+    entry.arg_description = option['arg_description']
+    return entry
 

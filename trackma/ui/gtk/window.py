@@ -14,30 +14,26 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
-from gi.repository import Gio, GLib, Gtk, Adw
+from gi.repository import Adw, Gio, GLib, Gtk
 from loguru import logger
 from trackma import messenger
-from trackma import utils
-from trackma.accounts import AccountManager
-from trackma.engine import Engine
-from trackma.ui.gtk import gtk_dir, from_variant
+from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountsview import TrackmaAccountsView
 from trackma.ui.gtk.newaccountview import TrackmaNewAccountView
 from trackma.ui.gtk.providersview import TrackmaProvidersView
 from trackma.ui.gtk.titlesview import TrackmaTitlesView
 
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/window.ui'))
+@Gtk.Template.from_file(get_resource_path('window.ui'))
 class TrackmaWindow(Adw.ApplicationWindow):
 
     __gtype_name__ = 'TrackmaWindow'
 
     # All views
-    leaflet = Gtk.Template.Child()
-    providers_view = Gtk.Template.Child()
-    new_account_view = Gtk.Template.Child()
-    accounts_view = Gtk.Template.Child()
-    titles_view = Gtk.Template.Child()
+    leaflet: Adw.Leaflet = Gtk.Template.Child()
+    providers_view: TrackmaProvidersView = Gtk.Template.Child()
+    new_account_view: TrackmaNewAccountView = Gtk.Template.Child()
+    accounts_view: TrackmaAccountsView = Gtk.Template.Child()
+    titles_view: TrackmaTitlesView = Gtk.Template.Child()
 
     def __init__(self, app: Adw.Application):
         ''' Trackma Window class
@@ -161,7 +157,6 @@ class TrackmaWindow(Adw.ApplicationWindow):
     def _create_help_overlay(self) -> None:
         ''' Get the help overlay template and attach it to the window
         '''
-        builder = Gtk.Builder.new_from_file(
-            os.path.join(gtk_dir, 'data/shortcuts.ui'))
+        builder = Gtk.Builder.new_from_file(get_resource_path('shortcuts.ui'))
         help_overlay = builder.get_object('shortcuts-window')
         self.set_help_overlay(help_overlay)

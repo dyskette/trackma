@@ -14,23 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Gtk
 from trackma.ui.gtk import get_resource_path
-from trackma.ui.gtk.providerdescription import ProviderDescription
 
-@Gtk.Template.from_file(get_resource_path('providerrow.ui'))
-class TrackmaProviderRow(Adw.ActionRow):
+@Gtk.Template.from_file(get_resource_path('titleslist.ui'))
+class TrackmaTitlesList(Gtk.Box):
 
-    __gtype_name__ = 'TrackmaProviderRow'
+    __gtype_name__ = 'TrackmaTitlesList'
 
-    provider_logo: Gtk.Picture = Gtk.Template.Child()
+    header_bar: Gtk.HeaderBar = Gtk.Template.Child()
 
-    def __init__(self, api: ProviderDescription):
+    def __init__(self):
         super().__init__()
-        self.api = api
-        self.set_title(api.title)
-        self.provider_logo.set_filename(api.logo_path)
-        self.connect('activated', self._on_activated)
-
-    def _on_activated(self, row, user_data=None):
-        self.activate_action('win.new-account', GLib.Variant.new_string(self.api.name))

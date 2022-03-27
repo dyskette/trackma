@@ -14,21 +14,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import os
-
-from gi.repository import Gtk, Gio, GObject
-from loguru import logger
+from gi.repository import Gtk
 from trackma import utils
-from trackma.ui.gtk import gtk_dir
+from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.providerdescription import ProviderDescription
 from trackma.ui.gtk.providerrow import TrackmaProviderRow
 
-@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/providersview.ui'))
+@Gtk.Template.from_file(get_resource_path('providersview.ui'))
 class TrackmaProvidersView(Gtk.Box):
 
     __gtype_name__ = 'TrackmaProvidersView'
 
-    providers_listbox = Gtk.Template.Child()
+    providers_listbox: Gtk.ListBox = Gtk.Template.Child()
 
     def __init__(self):
         ''' Trackma New Account class
