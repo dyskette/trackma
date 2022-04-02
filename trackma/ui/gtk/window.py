@@ -16,7 +16,6 @@
 
 from gi.repository import Adw, Gio, GLib, Gtk
 from loguru import logger
-from trackma import messenger
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountsview import TrackmaAccountsView
 from trackma.ui.gtk.newaccountview import TrackmaNewAccountView
@@ -28,7 +27,6 @@ class TrackmaWindow(Adw.ApplicationWindow):
 
     __gtype_name__ = 'TrackmaWindow'
 
-    # All views
     leaflet: Adw.Leaflet = Gtk.Template.Child()
     providers_view: TrackmaProvidersView = Gtk.Template.Child()
     new_account_view: TrackmaNewAccountView = Gtk.Template.Child()
@@ -100,6 +98,7 @@ class TrackmaWindow(Adw.ApplicationWindow):
     def _on_titles(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
         ''' Show the titles view
         '''
+        self.titles_view.prepare_for(parameter.get_int32())
         self.leaflet.set_visible_child(self.titles_view)
 
     def _on_about(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
@@ -130,16 +129,6 @@ class TrackmaWindow(Adw.ApplicationWindow):
             text=str(error))
         dialog.connect('response', lambda _dialog, response: _dialog.destroy())
         dialog.show()
-
-    def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:
-        ''' Handle all messages incoming from the trackma engine class
-        '''
-        if msgtype == messenger.TYPE_WARN:
-            logger.warning('Engine message: {}', msg)
-        elif msgtype != messenger.TYPE_DEBUG:
-            logger.info('Engine message: {}', msg)
-        else:
-            logger.debug('Engine message: {}', msg)
 
     def _register_actions(self) -> None:
         ''' Register all possible actions for the current window

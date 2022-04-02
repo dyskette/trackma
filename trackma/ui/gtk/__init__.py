@@ -15,8 +15,7 @@
 #
 
 import os
-from typing import NamedTuple
-from gi.repository import GObject, GLib
+from gi.repository import GLib
 gtk_dir = os.path.dirname(__file__)
 
 def main():

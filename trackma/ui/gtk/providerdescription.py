@@ -75,7 +75,7 @@ class ProviderDescription():
 
             return None
 
-        if self.login_type == utils.LOGIN_OAUTH_PKCE:
+        if self.login_type == utils.Login.OAUTH_PKCE:
             code_verifier = utils.oauth_generate_pkce()
             auth_url = auth_url % code_verifier
             return ProviderAuth(auth_url, code_verifier)
@@ -83,4 +83,4 @@ class ProviderDescription():
         return ProviderAuth(auth_url)
 
     def is_oauth(self) -> bool:
-        return self.login_type in [utils.LOGIN_OAUTH, utils.LOGIN_OAUTH_PKCE]
+        return self.login_type in [utils.Login.OAUTH, utils.Login.OAUTH_PKCE]

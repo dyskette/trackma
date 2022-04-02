@@ -36,7 +36,6 @@ class TrackmaAccountsView(Gtk.Box):
         self._model = Gio.ListStore.new(AccountDescription)
         self.accounts_list.bind_model(self._model, self._create_account_row)
 
-
     def refresh(self):
         ''' Refresh the list of accounts
         '''

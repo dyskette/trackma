@@ -16,6 +16,8 @@
 
 from gi.repository import Adw, GObject, Gtk
 from loguru import logger
+from trackma import messenger, utils
+from trackma.engine import Engine
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledetails import TrackmaTitleDetails
 from trackma.ui.gtk.titleslist import TrackmaTitlesList
@@ -40,3 +42,28 @@ class TrackmaTitlesView(Gtk.Box):
         self.leaflet.bind_property('folded',
             self.title_details.back_button, 'visible',
             GObject.BindingFlags.DEFAULT)
+
+    def prepare_for(self, account: int) -> None:
+        ''' Setup the titles view with all details from a specific account
+        '''
+        logger.debug('This should prepare account {}', account)
+        self._engine = Engine(message_handler=self._message_handler, accountnum=account)
+
+        try:
+            self._engine.start()
+        except utils.TrackmaFatal as e:
+            logger.opt(exception=True).error(e)
+            # self.emit('error-fatal', e)
+            return
+
+        self.titles_list.refresh(self._engine)
+
+    def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:
+        ''' Handle all messages incoming from the trackma engine class
+        '''
+        if msgtype == messenger.TYPE_WARN:
+            logger.warning('Engine message: {}', msg)
+        elif msgtype != messenger.TYPE_DEBUG:
+            logger.info('Engine message: {}', msg)
+        else:
+            logger.debug('Engine message: {}', msg)

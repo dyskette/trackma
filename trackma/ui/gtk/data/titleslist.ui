@@ -25,17 +25,26 @@
 
     <!-- sidebar -->
     <child>
-      <object class="GtkListBox">
+      <object class="GtkScrolledWindow">
         <property name="vexpand">True</property>
-
-        <child>
-
-        </child>
-
+        <property name="hscrollbar-policy">never</property>
+        <property name="propagate-natural-height">True</property>
+        <property name="min-content-height">300</property>
+        <property name="vadjustment">scroll_adjustment</property>
+        <property name="child">
+          <object class="GtkViewport">
+            <property name="scroll-to-focus">True</property>
+            <property name="child">
+              <object class="GtkListBox" id="titles_list" />
+            </property>
+          </object>
+       </property>
       </object>
     </child>
 
   </template>
+
+  <object class="GtkAdjustment" id="scroll_adjustment" />
 
   <menu id="viewmenu">
     <section>

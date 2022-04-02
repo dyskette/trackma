@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import Gio, GObject, Gtk
+from gi.repository import Gtk
 from trackma.ui.gtk import get_resource_path
 
 @Gtk.Template.from_file(get_resource_path('titledetails.ui'))
