@@ -14,58 +14,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import Gio, GObject, Gtk
+from gi.repository import Gio, Gtk
 from loguru import logger
 from trackma.engine import Engine
 from trackma.ui.gtk import get_resource_path
-
-class TrackmaTitleDescription(GObject.GObject):
-
-    __gtype_name__ = 'TrackmaTitleDescription'
-
-    def __init__(self, title: dict):
-        ''' Trackma Title Description class
-        '''
-        super().__init__()
-        self._title = title
-
-    @property
-    def provider_id(self):
-        return self._title['id']
-
-    @property
-    def title(self):
-        return self._title['title']
-
-    @property
-    def status(self):
-        return self._title['my_status']
-
-    def __bool__(self):
-        return True
-
-    def __eq__(self, other):
-        if not isinstance(other, TrackmaTitleDescription):
-            # don't attempt to compare against unrelated types
-            return NotImplemented
-
-        return self.provider_id == other.provider_id
-
-@Gtk.Template.from_file(get_resource_path('titlerow.ui'))
-class TrackmaTitleRow(Gtk.ListBoxRow):
-
-    __gtype_name__ = 'TrackmaTitleRow'
-
-    title: Gtk.Label = Gtk.Template.Child()
-    status: Gtk.Label = Gtk.Template.Child()
-
-    def __init__(self, description: TrackmaTitleDescription):
-        ''' Trackma Title Row class
-        '''
-        super().__init__()
-        self._description = description
-        self.title.set_label(self._description.title)
-        self.status.set_label(self._description.status)
+from trackma.ui.gtk.titledescription import TrackmaTitleDescription
+from trackma.ui.gtk.titlerow import TrackmaTitleRow
 
 @Gtk.Template.from_file(get_resource_path('titleslist.ui'))
 class TrackmaTitlesList(Gtk.Box):
