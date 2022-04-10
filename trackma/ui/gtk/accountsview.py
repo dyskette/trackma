@@ -14,6 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import time
+import threading
+from loguru import logger
 from gi.repository import Adw, Gio, GLib, Gtk
 from trackma.accounts import AccountManager
 from trackma.ui.gtk import get_resource_path
@@ -82,6 +85,16 @@ class TrackmaAccountsView(Gtk.Box):
 
         dialog.connect('response', on_response)
         dialog.show()
+
+    def set_spinning(self, account_index: int, visible: bool, sleep_seconds: int = None) -> None:
+        ''' Set a visible spinner after the seconds specified for an account row
+        '''
+        for i, account_description in enumerate(self._model):
+            account_row = self.accounts_list.get_row_at_index(i)
+            if account_description.index == account_index and visible:
+                account_row.set_spinner_visible(True, sleep_seconds)
+            else:
+                account_row.set_spinner_visible(False)
 
     def _create_account_row(self, account):
         return TrackmaAccountRow(account)

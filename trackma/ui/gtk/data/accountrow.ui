@@ -15,6 +15,14 @@
 
     <!-- Trash -->
     <child type="suffix">
+      <object class="GtkSpinner" id="spinner">
+        <property name="spinning">False</property>
+        <property name="visible">False</property>
+      </object>
+    </child>
+
+    <!-- Trash -->
+    <child type="suffix">
       <object class="GtkButton" id="remove_button">
         <property name="valign">center</property>
         <property name="icon-name">user-trash-symbolic</property>

@@ -14,13 +14,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import Adw, GObject, Gtk
+import time
+import threading
+from gi.repository import Adw, GLib, GObject, Gtk
 from loguru import logger
 from trackma import messenger, utils
 from trackma.engine import Engine
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledetails import TrackmaTitleDetails
 from trackma.ui.gtk.titleslist import TrackmaTitlesList
+from typing import Callable
 
 @Gtk.Template.from_file(get_resource_path('titlesview.ui'))
 class TrackmaTitlesView(Gtk.Box):
@@ -42,21 +45,49 @@ class TrackmaTitlesView(Gtk.Box):
         self.leaflet.bind_property('folded',
             self.title_details.back_button, 'visible',
             GObject.BindingFlags.DEFAULT)
+        self._engine = None
+        self._engine_thread = None
 
-    def prepare_for(self, account: int) -> None:
+    def prepare_for(self, account: int, on_preparation_finished: Callable[bool, str]) -> None:
         ''' Setup the titles view with all details from a specific account
         '''
-        logger.debug('This should prepare account {}', account)
+        logger.debug('Preparing titles view for account {}', account)
+
+        def callbacks(success: bool, engine: Engine = None) -> None:
+            if success:
+                self.titles_list.refresh(engine)
+
+            on_preparation_finished(success, None)
+
+        def engine_start(engine: Engine) -> None:
+            try:
+                thread = threading.currentThread()
+
+                if getattr(thread, 'canceled', False):
+                    return
+
+                engine.start()
+
+                if getattr(thread, 'canceled', False):
+                    return
+
+                GLib.idle_add(
+                    callbacks, True, engine,
+                    priority=GLib.PRIORITY_LOW
+                )
+            except utils.TrackmaFatal as e:
+                logger.opt(exception=True).error('Unable to open account')
+                GLib.idle_add(
+                    callbacks, False,
+                    priority=GLib.PRIORITY_LOW
+                )
+
+        if self._engine_thread:
+            self._engine_thread.canceled = True
+
         self._engine = Engine(message_handler=self._message_handler, accountnum=account)
-
-        try:
-            self._engine.start()
-        except utils.TrackmaFatal as e:
-            logger.opt(exception=True).error(e)
-            # self.emit('error-fatal', e)
-            return
-
-        self.titles_list.refresh(self._engine)
+        self._engine_thread = threading.Thread(target=engine_start, args=[self._engine])
+        self._engine_thread.start()
 
     def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:
         ''' Handle all messages incoming from the trackma engine class

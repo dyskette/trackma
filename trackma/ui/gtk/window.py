@@ -95,11 +95,24 @@ class TrackmaWindow(Adw.ApplicationWindow):
         if succeeded:
             self.leaflet.set_visible_child(self.new_account_view)
 
-    def _on_titles(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
+    def _on_titles(self, action: Gio.SimpleAction, account_index: GLib.Variant, user_data=None) -> None:
         ''' Show the titles view
         '''
-        self.titles_view.prepare_for(parameter.get_int32())
-        self.leaflet.set_visible_child(self.titles_view)
+        visible_child = self.leaflet.get_visible_child()
+
+        if visible_child == self.accounts_view:
+            self.accounts_view.set_spinning(account_index.get_int32(), True, 1)
+
+        def on_preparation_finished(succeeded: bool, reason: str):
+            if succeeded:
+                self.leaflet.set_visible_child(self.titles_view)
+            else:
+                self._show_notification("Unable to open your account", reason)
+
+            if visible_child == self.accounts_view:
+                self.accounts_view.set_spinning(account_index.get_int32(), False)
+
+        self.titles_view.prepare_for(account_index.get_int32(), on_preparation_finished)
 
     def _on_about(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
         ''' Show the about window
@@ -119,6 +132,9 @@ class TrackmaWindow(Adw.ApplicationWindow):
             TODO: Delete this method when everything is implemented
         '''
         logger.error('On action callback is not implemented')
+
+    def _show_notification(self, message, details):
+        logger.error(message)
 
     def _error_dialog(error):
         dialog = Gtk.MessageDialog(

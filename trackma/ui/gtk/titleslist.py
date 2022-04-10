@@ -41,6 +41,7 @@ class TrackmaTitlesList(Gtk.Box):
     def refresh(self, engine: Engine) -> bool:
         ''' Takes an initialized engine and refreshes the list of titles
         '''
+        logger.debug('Titlelist refresh called')
         if not engine.loaded:
             return False
 
@@ -50,10 +51,12 @@ class TrackmaTitlesList(Gtk.Box):
         return True
 
     def _refresh_filters(self, engine: Engine) -> None:
+        logger.debug('Refresh filters called')
         self.statuses_num = engine.mediainfo['statuses'].copy()
         self.statuses_names = engine.mediainfo['statuses_dict'].copy()
 
     def _refresh_list(self, engine: Engine):
+        logger.debug('Refresh list called')
         self._items = [TrackmaTitleDescription(item) for item in engine.get_list()]
         self._items.sort(key=lambda item: (item.title.casefold(), item.title))
         self._model.remove_all()
@@ -68,10 +71,13 @@ class TrackmaTitlesList(Gtk.Box):
         self.titles_list.set_filter_func(self._filter_func, None, self._destroy_notif)
 
     def _filter_func(self, row: TrackmaTitleRow, user_data=None, titles_list=None) -> bool:
+        # logger.debug('title filter func called')
         return True
 
     def _destroy_notif(self, data=None) -> None:
+        # logger.debug('destroy title notification called')
         pass
 
     def _create_title_row(self, title: TrackmaTitleDescription):
+        # logger.debug('create title row called')
         return TrackmaTitleRow(title)
