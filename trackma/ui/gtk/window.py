@@ -27,6 +27,7 @@ class TrackmaWindow(Adw.ApplicationWindow):
 
     __gtype_name__ = 'TrackmaWindow'
 
+    toast_overlay: Adw.ToastOverlay = Gtk.Template.Child()
     leaflet: Adw.Leaflet = Gtk.Template.Child()
     providers_view: TrackmaProvidersView = Gtk.Template.Child()
     new_account_view: TrackmaNewAccountView = Gtk.Template.Child()
@@ -133,8 +134,10 @@ class TrackmaWindow(Adw.ApplicationWindow):
         '''
         logger.error('On action callback is not implemented')
 
-    def _show_notification(self, message, details):
+    def _show_notification(self, message: str, details: str) -> None:
         logger.error(message)
+        toast = Adw.Toast.new(title=message)
+        self.toast_overlay.add_toast(toast)
 
     def _error_dialog(error):
         dialog = Gtk.MessageDialog(

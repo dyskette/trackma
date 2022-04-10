@@ -6,21 +6,25 @@
     <property name="default-width">850</property>
     <property name="default-height">650</property>
     <child>
-      <object class="AdwLeaflet" id="leaflet">
-        <property name="vexpand">1</property>
-        <property name="can-unfold">0</property>
-        <child>
-          <object class="TrackmaAccountsView" id="accounts_view" />
-        </child>
-	      <child>
-	        <object class="TrackmaProvidersView" id="providers_view" />
-	      </child>
-        <child>
-          <object class="TrackmaNewAccountView" id="new_account_view" />
-        </child>
-        <child>
-          <object class="TrackmaTitlesView" id="titles_view" />
-        </child>
+      <object class="AdwToastOverlay" id="toast_overlay">
+        <property name="child">
+          <object class="AdwLeaflet" id="leaflet">
+            <property name="vexpand">1</property>
+            <property name="can-unfold">0</property>
+            <child>
+              <object class="TrackmaAccountsView" id="accounts_view" />
+            </child>
+	          <child>
+	            <object class="TrackmaProvidersView" id="providers_view" />
+	          </child>
+            <child>
+              <object class="TrackmaNewAccountView" id="new_account_view" />
+            </child>
+            <child>
+              <object class="TrackmaTitlesView" id="titles_view" />
+            </child>
+          </object>
+        </property>
       </object>
     </child>
   </template>

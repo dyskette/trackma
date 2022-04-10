@@ -53,11 +53,11 @@ class TrackmaTitlesView(Gtk.Box):
         '''
         logger.debug('Preparing titles view for account {}', account)
 
-        def callbacks(success: bool, engine: Engine = None) -> None:
+        def callbacks(success: bool, engine: Engine = None, reason: str = None) -> None:
             if success:
                 self.titles_list.refresh(engine)
 
-            on_preparation_finished(success, None)
+            on_preparation_finished(success, reason)
 
         def engine_start(engine: Engine) -> None:
             try:
@@ -78,7 +78,7 @@ class TrackmaTitlesView(Gtk.Box):
             except utils.TrackmaFatal as e:
                 logger.opt(exception=True).error('Unable to open account')
                 GLib.idle_add(
-                    callbacks, False,
+                    callbacks, False, None, str(e),
                     priority=GLib.PRIORITY_LOW
                 )
 
