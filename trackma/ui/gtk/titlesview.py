@@ -14,16 +14,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import time
 import threading
 from gi.repository import Adw, GLib, GObject, Gtk
 from loguru import logger
-from trackma import messenger, utils
+from trackma import messenger
 from trackma.engine import Engine
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledetails import TrackmaTitleDetails
 from trackma.ui.gtk.titleslist import TrackmaTitlesList
 from typing import Callable
+
 
 @Gtk.Template.from_file(get_resource_path('titlesview.ui'))
 class TrackmaTitlesView(Gtk.Box):
@@ -40,22 +40,27 @@ class TrackmaTitlesView(Gtk.Box):
         super().__init__()
 
         self.leaflet.bind_property('folded',
-            self.titles_list.header_bar, 'show-end-title-buttons',
-            GObject.BindingFlags.DEFAULT)
+                                   self.titles_list.header_bar, 'show-end-title-buttons',
+                                   GObject.BindingFlags.DEFAULT)
         self.leaflet.bind_property('folded',
-            self.title_details.back_button, 'visible',
-            GObject.BindingFlags.DEFAULT)
+                                   self.title_details.back_button, 'visible',
+                                   GObject.BindingFlags.DEFAULT)
         self._engine = None
         self._engine_thread = None
 
-    def prepare_for(self, account: int, on_preparation_finished: Callable[bool, str]) -> None:
+    def prepare_for(self, account: int, on_preparation_finished: Callable[[bool, str], None]) -> None:
         ''' Setup the titles view with all details from a specific account
         '''
         logger.debug('Preparing titles view for account {}', account)
 
         def callbacks(success: bool, engine: Engine = None, reason: str = None) -> None:
             if success:
-                self.titles_list.refresh(engine)
+                try:
+                    self.titles_list.refresh(engine)
+                except Exception as e:
+                    logger.opt(exception=True).error('Unable to open account')
+                    on_preparation_finished(False, str(e))
+                    return
 
             on_preparation_finished(success, reason)
 
@@ -75,7 +80,7 @@ class TrackmaTitlesView(Gtk.Box):
                     callbacks, True, engine,
                     priority=GLib.PRIORITY_LOW
                 )
-            except utils.TrackmaFatal as e:
+            except Exception as e:
                 logger.opt(exception=True).error('Unable to open account')
                 GLib.idle_add(
                     callbacks, False, None, str(e),
@@ -85,8 +90,10 @@ class TrackmaTitlesView(Gtk.Box):
         if self._engine_thread:
             self._engine_thread.canceled = True
 
-        self._engine = Engine(message_handler=self._message_handler, accountnum=account)
-        self._engine_thread = threading.Thread(target=engine_start, args=[self._engine])
+        self._engine = Engine(
+            message_handler=self._message_handler, accountnum=account)
+        self._engine_thread = threading.Thread(
+            target=engine_start, args=[self._engine])
         self._engine_thread.start()
 
     def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:

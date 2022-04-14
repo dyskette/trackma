@@ -13,7 +13,7 @@
       </object>
     </child>
 
-    <!-- Trash -->
+    <!-- Spinner -->
     <child type="suffix">
       <object class="GtkSpinner" id="spinner">
         <property name="spinning">False</property>

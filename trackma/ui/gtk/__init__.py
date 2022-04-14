@@ -18,6 +18,7 @@ import os
 from gi.repository import GLib
 gtk_dir = os.path.dirname(__file__)
 
+
 def main():
     import signal
     import sys
@@ -30,10 +31,12 @@ def main():
     app = TrackmaApplication()
     sys.exit(app.run(sys.argv))
 
+
 def get_resource_path(ending: str) -> str:
     ''' Get gtk resource path
     '''
     return os.path.join(os.path.dirname(__file__), 'data', ending)
+
 
 def from_variant(value: GLib.Variant) -> any:
     ''' Get python real value from a GLib.Variant type
@@ -52,6 +55,7 @@ def from_variant(value: GLib.Variant) -> any:
     else:
         return glib_type_getters[value.get_type()](value)
 
+
 def create_option_entry(option: dict) -> GLib.OptionEntry:
     ''' Create a GLib.OptionEntry using a dictionary description
     '''
@@ -64,4 +68,3 @@ def create_option_entry(option: dict) -> GLib.OptionEntry:
     entry.description = option['description']
     entry.arg_description = option['arg_description']
     return entry
-

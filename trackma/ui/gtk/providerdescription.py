@@ -17,22 +17,26 @@
 from loguru import logger
 from trackma import utils
 
+
 class ProviderAuth():
     def __init__(self, url: str, code_verifier: str = None):
         self.url = url
         self.code_verifier = code_verifier
+
 
 class ProviderDescription():
     def __init__(self, name: str):
         ''' Provider Description
         '''
         if name is None:
-            logger.error('The name is empty, please provide a valid library name')
+            logger.error(
+                'The name is empty, please provide a valid library name')
             self._is_fine = False
             return
 
         if name not in utils.available_libs.keys():
-            logger.error('The api {} is not registered in the available libs. Please verify the library name', name)
+            logger.error(
+                'The api {} is not registered in the available libs. Please verify the library name', name)
             self._is_fine = False
             return
 
@@ -65,7 +69,8 @@ class ProviderDescription():
 
     def get_auth(self) -> ProviderAuth:
         if not self.is_oauth():
-            logger.warning('Library is not oauth, as such it cannot have an auth url')
+            logger.warning(
+                'Library is not oauth, as such it cannot have an auth url')
             return None
 
         auth_url = self._api[3] if len(self._api) > 3 else None

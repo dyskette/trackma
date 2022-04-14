@@ -16,6 +16,7 @@
 
 from gi.repository import GObject
 
+
 class TrackmaTitleDescription(GObject.GObject):
 
     __gtype_name__ = 'TrackmaTitleDescription'
@@ -37,6 +38,22 @@ class TrackmaTitleDescription(GObject.GObject):
     @property
     def status(self):
         return self._title['my_status']
+
+    @property
+    def image(self):
+        return self._title['image']
+
+    @property
+    def thumbnail(self):
+        return self._title['image_thumb']
+
+    @property
+    def user_progress(self):
+        return self._title['my_progress']
+
+    @property
+    def total(self):
+        return self._title['total']
 
     def __bool__(self):
         return True

@@ -22,6 +22,7 @@ from trackma.ui.gtk.newaccountview import TrackmaNewAccountView
 from trackma.ui.gtk.providersview import TrackmaProvidersView
 from trackma.ui.gtk.titlesview import TrackmaTitlesView
 
+
 @Gtk.Template.from_file(get_resource_path('window.ui'))
 class TrackmaWindow(Adw.ApplicationWindow):
 
@@ -44,33 +45,33 @@ class TrackmaWindow(Adw.ApplicationWindow):
         super().__init__(application=app)
 
         self._window_actions = [
-            ( 'accounts', self._on_accounts ),
-            ( 'providers', self._on_providers ),
-            ( 'new-account', self._on_new_account, 's' ),
-            ( 'titles', self._on_titles, "i" ),
-            ( 'preferences', self._on_preferences ),
-            ( 'about', self._on_about ),
+            ('accounts', self._on_accounts),
+            ('providers', self._on_providers),
+            ('new-account', self._on_new_account, 's'),
+            ('titles', self._on_titles, "i"),
+            ('preferences', self._on_preferences),
+            ('about', self._on_about),
         ]
 
         self._list_actions = [
-            ( 'search', self._on_action ),
-            ( 'syncronize', self._on_action ),
-            ( 'upload', self._on_action ),
-            ( 'download', self._on_action ),
-            ( 'scanfiles', self._on_action ),
-            ( 'remove', self.accounts_view.remove_account, 'i' )
+            ('search', self._on_action),
+            ('syncronize', self._on_action),
+            ('upload', self._on_action),
+            ('download', self._on_action),
+            ('scanfiles', self._on_action),
+            ('remove', self.accounts_view.remove_account, 'i')
         ]
 
         self._show_actions = [
-            ( 'play-next', self._on_action ),
-            ( 'play-episode', self._on_action ),
-            ( 'play-random', self._on_action ),
-            ( 'view-details', self._on_action ),
-            ( 'open-website', self._on_action ),
-            ( 'open-folder', self._on_action ),
-            ( 'copy-title', self._on_action ),
-            ( 'set-alternative-title', self._on_action ),
-            ( 'remove', self._on_action ),
+            ('play-next', self._on_action),
+            ('play-episode', self._on_action),
+            ('play-random', self._on_action),
+            ('view-details', self._on_action),
+            ('open-website', self._on_action),
+            ('open-folder', self._on_action),
+            ('copy-title', self._on_action),
+            ('set-alternative-title', self._on_action),
+            ('remove', self._on_action),
         ]
 
         self._register_actions()
@@ -91,7 +92,8 @@ class TrackmaWindow(Adw.ApplicationWindow):
     def _on_new_account(self, action: Gio.SimpleAction, provider_name: GLib.Variant, user_data=None) -> None:
         ''' Show the "new account" view
         '''
-        succeeded = self.new_account_view.prepare_for(provider_name.get_string())
+        succeeded = self.new_account_view.prepare_for(
+            provider_name.get_string())
 
         if succeeded:
             self.leaflet.set_visible_child(self.new_account_view)
@@ -111,9 +113,11 @@ class TrackmaWindow(Adw.ApplicationWindow):
                 self._show_notification("Unable to open your account", reason)
 
             if visible_child == self.accounts_view:
-                self.accounts_view.set_spinning(account_index.get_int32(), False)
+                self.accounts_view.set_spinning(
+                    account_index.get_int32(), False)
 
-        self.titles_view.prepare_for(account_index.get_int32(), on_preparation_finished)
+        self.titles_view.prepare_for(
+            account_index.get_int32(), on_preparation_finished)
 
     def _on_about(self, action: Gio.SimpleAction, parameter: GLib.Variant, user_data=None) -> None:
         ''' Show the about window
@@ -124,7 +128,8 @@ class TrackmaWindow(Adw.ApplicationWindow):
         ''' Show the preferences window
         '''
         if self._engine is None:
-            logger.error('Cannot open the preferences window because the engine has not been started')
+            logger.error(
+                'Cannot open the preferences window because the engine has not been started')
         else:
             logger.debug('Here we will show the preferences window')
 

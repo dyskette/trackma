@@ -20,6 +20,7 @@ from trackma.accounts import AccountManager
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.providerdescription import ProviderDescription
 
+
 @Gtk.Template.from_file(get_resource_path('newaccountview.ui'))
 class TrackmaNewAccountView(Gtk.Box):
 
@@ -52,7 +53,8 @@ class TrackmaNewAccountView(Gtk.Box):
             self.auth = self.provider.get_auth()
 
             if self.auth is not None:
-                self.oauth_pin_url.set_subtitle(GLib.markup_escape_text(self.auth.url))
+                self.oauth_pin_url.set_subtitle(
+                    GLib.markup_escape_text(self.auth.url))
 
             self.stack.set_visible_child_name('oauth-page')
         else:
@@ -70,7 +72,8 @@ class TrackmaNewAccountView(Gtk.Box):
 
     @Gtk.Template.Callback()
     def on_pin_url_activated(self, row: Adw.ActionRow) -> None:
-        Gtk.show_uri(Gio.Application.get_default().get_active_window(), self.auth.url, Gdk.CURRENT_TIME)
+        Gtk.show_uri(Gio.Application.get_default(
+        ).get_active_window(), self.auth.url, Gdk.CURRENT_TIME)
 
     @Gtk.Template.Callback()
     def on_entry_changed(self, entry: Gtk.Entry, user_data=None) -> None:
@@ -79,9 +82,11 @@ class TrackmaNewAccountView(Gtk.Box):
         has_content = False
 
         if self.provider.is_oauth():
-            has_content = len(self.oauth_username.get_text()) > 0 and len(self.oauth_pin.get_text()) > 0
+            has_content = len(self.oauth_username.get_text()) > 0 and len(
+                self.oauth_pin.get_text()) > 0
         else:
-            has_content = len(self.standard_username.get_text()) > 0 and len(self.standard_password.get_text()) > 0
+            has_content = len(self.standard_username.get_text()) > 0 and len(
+                self.standard_password.get_text()) > 0
 
         self.save_button.set_sensitive(has_content)
 
@@ -94,7 +99,7 @@ class TrackmaNewAccountView(Gtk.Box):
                 self.oauth_username.get_text().strip(),
                 self.oauth_pin.get_text(),
                 self.provider.name,
-                { 'code_verifier': self.auth.code_verifier })
+                {'code_verifier': self.auth.code_verifier})
         else:
             AccountManager().add_account(
                 self.standard_username.get_text().strip(),

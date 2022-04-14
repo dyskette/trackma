@@ -18,6 +18,7 @@ from gi.repository import Adw, GLib, Gtk
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.providerdescription import ProviderDescription
 
+
 @Gtk.Template.from_file(get_resource_path('providerrow.ui'))
 class TrackmaProviderRow(Adw.ActionRow):
 
@@ -33,4 +34,5 @@ class TrackmaProviderRow(Adw.ActionRow):
         self.connect('activated', self._on_activated)
 
     def _on_activated(self, row, user_data=None):
-        self.activate_action('win.new-account', GLib.Variant.new_string(self.api.name))
+        self.activate_action(
+            'win.new-account', GLib.Variant.new_string(self.api.name))

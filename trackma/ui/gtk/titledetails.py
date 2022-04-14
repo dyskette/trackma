@@ -17,6 +17,7 @@
 from gi.repository import Gtk
 from trackma.ui.gtk import get_resource_path
 
+
 @Gtk.Template.from_file(get_resource_path('titledetails.ui'))
 class TrackmaTitleDetails(Gtk.Box):
 

@@ -14,14 +14,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import time
-import threading
-from loguru import logger
 from gi.repository import Adw, Gio, GLib, Gtk
 from trackma.accounts import AccountManager
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountdescription import AccountDescription
 from trackma.ui.gtk.accountrow import TrackmaAccountRow
+
 
 @Gtk.Template.from_file(get_resource_path('accountsview.ui'))
 class TrackmaAccountsView(Gtk.Box):

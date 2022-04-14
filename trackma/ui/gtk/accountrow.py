@@ -21,6 +21,7 @@ from gi.repository import Adw, GLib, Gtk
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.accountdescription import AccountDescription
 
+
 @Gtk.Template.from_file(get_resource_path('accountrow.ui'))
 class TrackmaAccountRow(Adw.ActionRow):
 
@@ -39,7 +40,8 @@ class TrackmaAccountRow(Adw.ActionRow):
 
     def set_spinner_visible(self, visible: bool, sleep_seconds: int = None) -> None:
         def set_spinner():
-            logger.debug('Spinner visible for this row {}', self.account.username)
+            logger.debug('Spinner visible for this row {}',
+                         self.account.username)
             self.spinner.set_visible(True)
             self.spinner.start()
 
@@ -48,7 +50,8 @@ class TrackmaAccountRow(Adw.ActionRow):
             current_thread = threading.currentThread()
 
             if getattr(current_thread, 'canceled', False):
-                logger.debug('Spinner canceled for this row {}', self.account.username)
+                logger.debug('Spinner canceled for this row {}',
+                             self.account.username)
                 return
 
             GLib.idle_add(
@@ -58,10 +61,12 @@ class TrackmaAccountRow(Adw.ActionRow):
         if visible:
             if not sleep_seconds:
                 sleep_seconds = 0
-            self.spinner_thread = threading.Thread(target=sleep_spinner, args=[sleep_seconds])
+            self.spinner_thread = threading.Thread(
+                target=sleep_spinner, args=[sleep_seconds])
             self.spinner_thread.start()
         else:
-            logger.debug('Spinner invisible for this row {}', self.account.username)
+            logger.debug('Spinner invisible for this row {}',
+                         self.account.username)
             if self.spinner_thread:
                 self.spinner_thread.canceled = True
             self.spinner.set_visible(False)
@@ -69,9 +74,10 @@ class TrackmaAccountRow(Adw.ActionRow):
 
     @Gtk.Template.Callback()
     def on_activated(self, row, user_data=None):
-        self.activate_action('win.titles', GLib.Variant.new_int32(self.account.index))
+        self.activate_action(
+            'win.titles', GLib.Variant.new_int32(self.account.index))
 
     @Gtk.Template.Callback()
     def on_remove_clicked(self, user_data=None):
-        self.activate_action('list.remove', GLib.Variant.new_int32(self.account.index))
-
+        self.activate_action(
+            'list.remove', GLib.Variant.new_int32(self.account.index))

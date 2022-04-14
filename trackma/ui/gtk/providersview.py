@@ -20,6 +20,7 @@ from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.providerdescription import ProviderDescription
 from trackma.ui.gtk.providerrow import TrackmaProviderRow
 
+
 @Gtk.Template.from_file(get_resource_path('providersview.ui'))
 class TrackmaProvidersView(Gtk.Box):
 

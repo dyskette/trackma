@@ -19,6 +19,7 @@ from loguru import logger
 from trackma.accounts import AccountManager
 from trackma.ui.gtk.providerdescription import ProviderDescription
 
+
 class AccountDescription(GObject.Object):
 
     __gtype_name__ = 'AccountDescription'
@@ -64,7 +65,8 @@ class AccountDescription(GObject.Object):
             return None
 
         if not isinstance(account, dict):
-            logger.error('Cannot read account entry {}, is type {}', index, type(account))
+            logger.error('Cannot read account entry {}, is type {}',
+                         index, type(account))
             return None
 
         return account

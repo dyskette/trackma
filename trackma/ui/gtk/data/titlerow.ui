@@ -1,33 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <template class="TrackmaTitleRow" parent="GtkListBoxRow">
+    <!-- <property name="height-request">120</property> -->
     <child>
       <object class="GtkBox">
 
         <child>
-          <object class="GtkBox">
-            <property name="width-request">40</property>
-            <property name="halign">center</property>
+          <object class="GtkPicture" id="cover">
+            <property name="valign">start</property>
+            <property name="halign">start</property>
             <property name="margin-start">6</property>
             <property name="margin-end">6</property>
             <property name="margin-top">6</property>
             <property name="margin-bottom">6</property>
-
-            <child type="suffix">
-              <object class="GtkImage" id="arrow">
-                <!-- <property name="visible" bind-source="CcListRow" bind-property="show-arrow" bind-flags="sync-create"/> -->
-                <property name="valign">center</property>
-                <property name="icon-name">go-next-symbolic</property>
-              </object>
-            </child>
+            <property name="width-request">60</property>
           </object>
         </child>
 
-
         <child>
           <object class="GtkBox">
+            <property name="spacing">6</property>
             <property name="orientation">vertical</property>
-            <property name="vexpand">True</property>
+            <property name="hexpand">True</property>
             <property name="margin-start">6</property>
             <property name="margin-end">6</property>
             <property name="margin-top">6</property>
@@ -36,7 +30,7 @@
             <child>
               <object class="GtkLabel" id="title">
                 <property name="xalign">0</property>
-                <property name="wrap">True</property>
+                <property name="ellipsize">end</property>
                 <attributes>
                   <attribute name="weight" value="bold"/>
                 </attributes>
@@ -48,7 +42,8 @@
                 <child>
                   <object class="GtkLabel" id="status">
                     <property name="xalign">0</property>
-                    <property name="wrap">True</property>
+                    <property name="halign">end</property>
+                    <!-- <property name="hexpand">True</property> -->
                     <style>
                       <class name="dim-label" />
                     </style>
@@ -56,6 +51,18 @@
                 </child>
               </object>
             </child>
+
+            <child>
+               <object class="GtkProgressBar" id="progressbar">
+                <property name="fraction">0.0</property>
+                <property name="margin_top">20</property>
+                <property name="margin_bottom">12</property>
+                <!-- <style> -->
+                <!--   <class name="upgrade-progressbar"/> -->
+                <!-- </style> -->
+              </object>
+            </child>
+
           </object>
         </child>
 

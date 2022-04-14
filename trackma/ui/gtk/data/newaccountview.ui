@@ -173,9 +173,6 @@
                                 <child type="suffix">
                                   <object class="GtkImage">
                                     <property name="icon-name">external-link-symbolic</property>
-                                    <style>
-                                      <class name="dim-label" />
-                                    </style>
                                   </object>
                                 </child>
 

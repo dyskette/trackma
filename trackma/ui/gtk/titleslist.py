@@ -14,12 +14,56 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import threading
+import queue
 from gi.repository import Gio, Gtk
 from loguru import logger
 from trackma.engine import Engine
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledescription import TrackmaTitleDescription
 from trackma.ui.gtk.titlerow import TrackmaTitleRow
+from typing import List
+
+
+class TrackmaTitlesListModel(Gtk.SortListModel):
+    def __init__(self):
+        self.list_store = Gio.ListStore(item_type=TrackmaTitleDescription)
+
+        self.filter = Gtk.CustomFilter()
+        self.filter.set_filter_func(self._filter_func)
+
+        self.filter_store = Gtk.FilterListModel(
+            model=self.list_store, filter=self.filter
+        )
+
+        self.sorter = Gtk.CustomSorter()
+        self.sorter.set_sort_func(self._sort_func)
+
+        super().__init__(model=self.filter_store, sorter=self.sorter)
+
+    def _filter_func(self, item: TrackmaTitleDescription, user_data=None) -> bool:
+        return True
+
+    def _sort_func(self, item1: TrackmaTitleDescription, item2: TrackmaTitleDescription, user_data=None) -> int:
+        if item1.title < item2.title:
+            return -1
+        elif item1.title == item2.title:
+            return 0
+        else:
+            return 1
+
+    def empty(self) -> None:
+        self.list_store.remove_all()
+
+    def add_items(self, items: List[TrackmaTitleDescription]) -> None:
+        for item in items:
+            if not item:
+                logger.debug(
+                    'Title description [{}] is bad, moving on', item.title)
+                continue
+
+            self.list_store.append(item)
+
 
 @Gtk.Template.from_file(get_resource_path('titleslist.ui'))
 class TrackmaTitlesList(Gtk.Box):
@@ -35,8 +79,11 @@ class TrackmaTitlesList(Gtk.Box):
         super().__init__()
         self._library = None
         self._titles = []
-        self._model = Gio.ListStore.new(TrackmaTitleDescription)
-        self.titles_list.bind_model(self._model, self._create_title_row)
+        self._titles_model = TrackmaTitlesListModel()
+        self.titles_list.bind_model(
+            self._titles_model, self._create_title_row, None)
+        self._queue = queue.Queue()
+        self._thread = self._create_thread(self._queue)
 
     def refresh(self, engine: Engine) -> bool:
         ''' Takes an initialized engine and refreshes the list of titles
@@ -57,27 +104,24 @@ class TrackmaTitlesList(Gtk.Box):
 
     def _refresh_list(self, engine: Engine):
         logger.debug('Refresh list called')
-        self._items = [TrackmaTitleDescription(item) for item in engine.get_list()]
-        self._items.sort(key=lambda item: (item.title.casefold(), item.title))
-        self._model.remove_all()
+        self._items = [TrackmaTitleDescription(
+            item) for item in engine.get_list()]
+        self._titles_model.empty()
+        self._titles_model.add_items(self._items)
+        for i in range(20):
+            self._queue.put(self.titles_list.get_row_at_index(i))
 
-        for item in self._items:
-            if not item:
-                logger.debug('Title description [{}] is bad, moving on', item.title)
-                continue
+    def _create_title_row(self, title: TrackmaTitleDescription, user_data=None):
+        row = TrackmaTitleRow(title, self.statuses_names)
+        return row
 
-            self._model.append(item)
+    def worker(self, q: queue.Queue):
+        while True:
+            row: TrackmaTitleRow = q.get()
+            row.load_cover()
+            q.task_done()
 
-        self.titles_list.set_filter_func(self._filter_func, None, self._destroy_notif)
-
-    def _filter_func(self, row: TrackmaTitleRow, user_data=None, titles_list=None) -> bool:
-        # logger.debug('title filter func called')
-        return True
-
-    def _destroy_notif(self, data=None) -> None:
-        # logger.debug('destroy title notification called')
-        pass
-
-    def _create_title_row(self, title: TrackmaTitleDescription):
-        # logger.debug('create title row called')
-        return TrackmaTitleRow(title)
+    def _create_thread(self, q: queue.Queue):
+        thread = threading.Thread(target=self.worker, args=[q], daemon=True)
+        thread.start()
+        return thread

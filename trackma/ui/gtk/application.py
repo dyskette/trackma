@@ -26,6 +26,7 @@ from trackma import utils
 from trackma.ui.gtk import create_option_entry, get_resource_path
 from trackma.ui.gtk.window import TrackmaWindow
 
+
 class TrackmaApplication(Adw.Application):
     __gtype_name__ = 'TrackmaApplication'
 
@@ -33,40 +34,41 @@ class TrackmaApplication(Adw.Application):
         ''' Trackma Application
         '''
         super().__init__(
-            application_id='com.github.z411.TrackmaGtk.Devel', # TODO: Remove devel
+            application_id='com.github.z411.TrackmaGtk.Devel',  # TODO: Remove devel
             flags=Gio.ApplicationFlags.NON_UNIQUE
         )
 
         self._app_options = [
-            { 'long_name': 'debug', 'short_name': ord('d'), 'flags': GLib.OptionFlags.NONE,
-            'arg': GLib.OptionArg.NONE, 'arg_data': None,
-            'description': 'Show debugging information', 'arg_description' : None }
+            {'long_name': 'debug', 'short_name': ord('d'), 'flags': GLib.OptionFlags.NONE,
+             'arg': GLib.OptionArg.NONE, 'arg_data': None,
+             'description': 'Show debugging information', 'arg_description': None}
         ]
 
         self._app_actions = [
-            ( 'quit', self._on_quit_activate ),
+            ('quit', self._on_quit_activate),
         ]
 
         self._window_accelerators = [
-            { 'action': 'win.show-help-overlay', 'accels': ['<Primary>question'] },
-            { 'action': 'app.quit', 'accels': ['<Primary>Q'] },
+            {'action': 'win.show-help-overlay',
+                'accels': ['<Primary>question']},
+            {'action': 'app.quit', 'accels': ['<Primary>Q']},
         ]
 
         self._list_accelerators = [
-            { 'action': 'list.search', 'accels': ['<Primary>F'] },
-            { 'action': 'list.syncronize', 'accels': ['<Primary>S'] },
-            { 'action': 'list.upload', 'accels': ['<Primary>E'] },
-            { 'action': 'list.download', 'accels': ['<Primary>D'] },
-            { 'action': 'list.scanfiles', 'accels': ['<Primary>L'] },
+            {'action': 'list.search', 'accels': ['<Primary>F']},
+            {'action': 'list.syncronize', 'accels': ['<Primary>S']},
+            {'action': 'list.upload', 'accels': ['<Primary>E']},
+            {'action': 'list.download', 'accels': ['<Primary>D']},
+            {'action': 'list.scanfiles', 'accels': ['<Primary>L']},
         ]
 
         self._show_accelerators = [
-            { 'action': 'show.play-next', 'accels': ['<Primary>N'] },
-            { 'action': 'show.play-random', 'accels': ['<Primary>R'] },
-            { 'action': 'show.episode-add', 'accels': ['<Primary>Right'] },
-            { 'action': 'show.episode-remove', 'accels': ['<Primary>Left'] },
-            { 'action': 'show.copy-title', 'accels': ['<Primary>C'] },
-            { 'action': 'show.remove', 'accels': ['Delete', 'KP_Delete'] },
+            {'action': 'show.play-next', 'accels': ['<Primary>N']},
+            {'action': 'show.play-random', 'accels': ['<Primary>R']},
+            {'action': 'show.episode-add', 'accels': ['<Primary>Right']},
+            {'action': 'show.episode-remove', 'accels': ['<Primary>Left']},
+            {'action': 'show.copy-title', 'accels': ['<Primary>C']},
+            {'action': 'show.remove', 'accels': ['Delete', 'KP_Delete']},
         ]
 
         self.log_level = 'INFO'
@@ -98,12 +100,13 @@ class TrackmaApplication(Adw.Application):
             self.log_level = 'DEBUG'
 
         format = ('<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | '
-            '<level>{level: <8}</level> | '
-            '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>\n'
-            '{extra}')
+                  '<level>{level: <8}</level> | '
+                  '<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>\n'
+                  '{extra}')
 
         logger.remove()
-        logger.add(sys.stdout, format=format, level=self.log_level, colorize=True)
+        logger.add(sys.stdout, format=format,
+                   level=self.log_level, colorize=True)
         return -1
 
     def _create_window(self) -> None:
@@ -129,4 +132,3 @@ class TrackmaApplication(Adw.Application):
 
         for accel in self._show_accelerators:
             self.set_accels_for_action(accel['action'], accel['accels'])
-
