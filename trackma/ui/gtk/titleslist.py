@@ -15,6 +15,7 @@
 #
 
 import threading
+import time
 from gi.repository import Gio, Gtk
 from collections import deque
 from loguru import logger
@@ -74,6 +75,7 @@ class TrackmaTitlesListModel(Gtk.SortListModel):
 class LazyLoadingThread(threading.Thread):
     def __init__(self, timeout: float = None):
         super(LazyLoadingThread, self).__init__()
+        self.name = "LazyLoadingThread"
         self.interruption_ocurred = threading.Event()
         self.timeout = 1 if float is None else timeout
         self.queue: deque[TrackmaTitleRow] = deque([])
@@ -98,9 +100,6 @@ class LazyLoadingThread(threading.Thread):
     def execute_queue(self) -> None:
         ''' Process the current queue
         '''
-        if len(self.queue) == 0:
-            logger.debug('No rows to process')
-
         while len(self.queue) > 0 and not self.interruption_ocurred.is_set():
             row = self.queue.popleft()
             row.load_cover()
@@ -118,7 +117,6 @@ class TrackmaTitlesList(Gtk.Box):
         ''' Trackma Titles List widget
         '''
         super().__init__()
-        self.first_load = False
         self._titles_model = TrackmaTitlesListModel()
         self.titles_list.bind_model(
             self._titles_model, self._create_title_row, None)
@@ -133,18 +131,24 @@ class TrackmaTitlesList(Gtk.Box):
         '''
         self.load_cover_for_visible_rows()
 
-    def load_cover_for_visible_rows(self):
+    def load_cover_for_visible_rows(self) -> None:
+        ''' Get all visible rows and replace the current queue in the lazy loading thread
+        '''
+        rows = self.get_visible_rows()
+        self._covers_thread.replace(rows)
+
+    def get_visible_rows(self) -> List[TrackmaTitleRow]:
         ''' Lazy loading of visible title rows' covers
 
             1. Get the first row that is visible, using the scroll position
             3. Iterate for every row and add it to the list that will load images 
                until we get to the last visible row or we are out of rows
         '''
-        current_height = 1
-        viewable_end_height = current_height + \
-            self.titles_list.get_adjustment().get_page_size()
-        end_height = self.titles_list.get_adjustment().get_upper()
-        row = self.titles_list.get_row_at_y(current_height)
+        adjustment = self.titles_list.get_adjustment()
+        current_height = adjustment.get_value()
+        viewable_end_height = current_height + adjustment.get_page_size()
+        end_height = adjustment.get_upper()
+        row: TrackmaTitleRow = self.titles_list.get_row_at_y(current_height)
 
         if row is None:
             logger.debug('No rows at position {} of {}',
@@ -163,15 +167,15 @@ class TrackmaTitlesList(Gtk.Box):
                 break
 
             current_height = current_height + row.get_height()
-            current_index = current_index + 1
+            current_index += 1
 
-            if not current_index < len(self._titles_model.list_store):
+            if current_index >= len(self._titles_model):
                 # We are out of rows
                 break
 
             row = self.titles_list.get_row_at_index(current_index)
 
-        self._covers_thread.replace(rows)
+        return rows
 
     def refresh(self, engine: Engine) -> bool:
         ''' Takes an initialized engine and refreshes the list of titles
@@ -182,6 +186,21 @@ class TrackmaTitlesList(Gtk.Box):
 
         self._refresh_filters(engine)
         self._refresh_list(engine)
+
+        def start_loading():
+            ''' This is sad and has a race condition with the loading of the
+                rows widgets in the list
+
+                TODO: Find a way to know when the list is actually showing the
+                title rows, either every single row that is shown or everything.
+                It doesn't matter.
+            '''
+            time.sleep(1)
+            logger.debug('Here come the row cover')
+            self.load_cover_for_visible_rows()
+
+        thread = threading.Thread(target=start_loading, daemon=True)
+        thread.start()
 
         return True
 

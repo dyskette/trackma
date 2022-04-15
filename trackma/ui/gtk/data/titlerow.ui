@@ -6,14 +6,25 @@
       <object class="GtkBox">
 
         <child>
-          <object class="GtkPicture" id="cover">
-            <property name="valign">start</property>
-            <property name="halign">start</property>
-            <property name="margin-start">6</property>
-            <property name="margin-end">6</property>
-            <property name="margin-top">6</property>
-            <property name="margin-bottom">6</property>
-            <property name="width-request">60</property>
+          <object class="GtkRevealer" id="cover_revealer">
+            <property name="width-request">86</property>
+            <property name="transition-type">crossfade</property>
+            <property name="child">
+              <object class="GtkBox">
+                <property name="margin-start">6</property>
+                <property name="margin-end">6</property>
+                <property name="margin-top">6</property>
+                <property name="margin-bottom">6</property>
+                <property name="width-request">60</property>
+                <child>
+                  <object class="GtkPicture" id="cover">
+                    <property name="valign">start</property>
+                    <property name="halign">start</property>
+                    <property name="width-request">60</property>
+                  </object>
+                </child>
+              </object>
+            </property>
           </object>
         </child>
 

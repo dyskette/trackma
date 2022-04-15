@@ -14,9 +14,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from threading import Thread
 import requests
 from loguru import logger
-from gi.repository import Gio, GLib, Gtk, GdkPixbuf
+from gi.repository import Adw, Gio, GLib, Gtk, GdkPixbuf
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledescription import TrackmaTitleDescription
 
@@ -28,6 +29,7 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
 
     title: Gtk.Label = Gtk.Template.Child()
     status: Gtk.Label = Gtk.Template.Child()
+    cover_revealer: Gtk.Stack = Gtk.Template.Child()
     cover: Gtk.Picture = Gtk.Template.Child()
     progressbar: Gtk.ProgressBar = Gtk.Template.Child()
 
@@ -37,8 +39,15 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
         super().__init__()
         self._description = description
         self.title.set_label(self._description.title)
+        self.cover.set_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(
+            get_resource_path('placeholder-no-image.png'),
+            60,
+            height=-1,
+            preserve_aspect_ratio=True
+        ))
         self.status.set_label(status_names[self._description.status])
         self.set_progress_bar()
+        self.cover_thread = None
         self.cover_loaded = False
 
     def set_progress_bar(self) -> None:
@@ -46,16 +55,25 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
         self.progressbar.set_fraction(fraction)
 
     def load_cover(self) -> None:
-        try:
-            pixbuf = self._get_pixbuf(self._download_file(), 60)
+        def set_cover():
+            try:
+                pixbuf = self._get_pixbuf(self._download_file(), 60)
 
-            if pixbuf:
-                GLib.idle_add(self.cover.set_pixbuf, pixbuf,
-                              priority=GLib.PRIORITY_LOW)
-                self.cover_loaded = True
-        except Exception as e:
-            logger.opt(exception=True).error(
-                'Failure for image {}', self._description.thumbnail)
+                if pixbuf:
+                    GLib.idle_add(self.cover.set_pixbuf, pixbuf,
+                                  priority=GLib.PRIORITY_LOW)
+                    self.cover_loaded = True
+            except Exception as e:
+                logger.opt(exception=True).error(
+                    'Failure for image {}', self._description.thumbnail)
+            
+            GLib.idle_add(self.cover_revealer.set_reveal_child, True,
+                        priority=GLib.PRIORITY_LOW)
+
+        if self.cover_thread is None:
+            self.cover_thread = Thread(
+                name="LoadCoverThread_" + self._description.title, target=set_cover, daemon=True)
+            self.cover_thread.start()
 
     def _download_file(self) -> bytes:
         response = requests.get(self._description.thumbnail)
