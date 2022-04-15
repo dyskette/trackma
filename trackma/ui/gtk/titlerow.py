@@ -39,6 +39,7 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
         self.title.set_label(self._description.title)
         self.status.set_label(status_names[self._description.status])
         self.set_progress_bar()
+        self.cover_loaded = False
 
     def set_progress_bar(self) -> None:
         fraction = self._description.user_progress / self._description.total
@@ -51,6 +52,7 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
             if pixbuf:
                 GLib.idle_add(self.cover.set_pixbuf, pixbuf,
                               priority=GLib.PRIORITY_LOW)
+                self.cover_loaded = True
         except Exception as e:
             logger.opt(exception=True).error(
                 'Failure for image {}', self._description.thumbnail)

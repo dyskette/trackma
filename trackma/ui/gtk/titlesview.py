@@ -93,7 +93,7 @@ class TrackmaTitlesView(Gtk.Box):
         self._engine = Engine(
             message_handler=self._message_handler, accountnum=account)
         self._engine_thread = threading.Thread(
-            target=engine_start, args=[self._engine])
+            target=engine_start, args=[self._engine], daemon=True)
         self._engine_thread.start()
 
     def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:
