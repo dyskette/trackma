@@ -17,7 +17,7 @@
 from threading import Thread
 import requests
 from loguru import logger
-from gi.repository import Adw, Gio, GLib, Gtk, GdkPixbuf
+from gi.repository import Gio, GLib, Gtk, GdkPixbuf
 from trackma.ui.gtk import get_resource_path
 from trackma.ui.gtk.titledescription import TrackmaTitleDescription
 
@@ -37,27 +37,29 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
         ''' Trackma Title Row class
         '''
         super().__init__()
-        self._description = description
-        self.title.set_label(self._description.title)
+        self.description = description
+        self.title.set_label(self.description.title)
         self.cover.set_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(
             get_resource_path('placeholder-no-image.png'),
             60,
             height=-1,
             preserve_aspect_ratio=True
         ))
-        self.status.set_label(status_names[self._description.status])
+        self.status.set_label(status_names[self.description.status])
         self.set_progress_bar()
         self.cover_thread = None
         self.cover_loaded = False
 
     def set_progress_bar(self) -> None:
-        fraction = self._description.user_progress / self._description.total
+        fraction = self.description.user_progress / self.description.total
         self.progressbar.set_fraction(fraction)
 
     def load_cover(self) -> None:
+        ''' Load cover image in the title row
+        '''
         def set_cover():
             try:
-                pixbuf = self._get_pixbuf(self._download_file(), 60)
+                pixbuf = self._get_pixbuf(self._download_thumbnail(), 60)
 
                 if pixbuf:
                     GLib.idle_add(self.cover.set_pixbuf, pixbuf,
@@ -65,18 +67,20 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
                     self.cover_loaded = True
             except Exception as e:
                 logger.opt(exception=True).error(
-                    'Failure for image {}', self._description.thumbnail)
-            
+                    'Failure for image {}', self.description.thumbnail)
+
             GLib.idle_add(self.cover_revealer.set_reveal_child, True,
-                        priority=GLib.PRIORITY_LOW)
+                          priority=GLib.PRIORITY_LOW)
 
         if self.cover_thread is None:
             self.cover_thread = Thread(
-                name="LoadCoverThread_" + self._description.title, target=set_cover, daemon=True)
+                name="LoadCoverThread_" + self.description.title, target=set_cover, daemon=True)
             self.cover_thread.start()
 
-    def _download_file(self) -> bytes:
-        response = requests.get(self._description.thumbnail)
+    def _download_thumbnail(self) -> bytes:
+        ''' Download the title's thumbnail file
+        '''
+        response = requests.get(self.description.thumbnail)
 
         if response.status_code != 200:
             logger.warn('Could not download image. Status {}',
@@ -86,6 +90,8 @@ class TrackmaTitleRow(Gtk.ListBoxRow):
         return response.content
 
     def _get_pixbuf(self, image_bytes: bytes, width: int) -> GdkPixbuf.Pixbuf:
+        ''' Convert a python image from bytes to a GdkPixbuf.Pixbuf
+        '''
         if not image_bytes:
             return None
 

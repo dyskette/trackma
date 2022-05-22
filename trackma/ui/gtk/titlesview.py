@@ -48,12 +48,16 @@ class TrackmaTitlesView(Gtk.Box):
         self._engine = None
         self._engine_thread = None
 
+        self.titles_list.connect('title-selected', self._on_title_selected)
+
     def prepare_for(self, account: int, on_preparation_finished: Callable[[bool, str], None]) -> None:
         ''' Setup the titles view with all details from a specific account
         '''
         logger.debug('Preparing titles view for account {}', account)
 
         def callbacks(success: bool, engine: Engine = None, reason: str = None) -> None:
+            ''' Execute callbacks after engine start
+            '''
             if success:
                 try:
                     self.titles_list.refresh(engine)
@@ -65,15 +69,19 @@ class TrackmaTitlesView(Gtk.Box):
             on_preparation_finished(success, reason)
 
         def engine_start(engine: Engine) -> None:
+            ''' Call engine start, which can be time expensive
+            '''
             try:
                 thread = threading.currentThread()
 
                 if getattr(thread, 'canceled', False):
+                    logger.debug('Thread was canceled before calling engine start')
                     return
 
                 engine.start()
 
                 if getattr(thread, 'canceled', False):
+                    logger.debug('Engine started but thread has been canceled')
                     return
 
                 GLib.idle_add(
@@ -95,6 +103,12 @@ class TrackmaTitlesView(Gtk.Box):
         self._engine_thread = threading.Thread(
             target=engine_start, args=[self._engine], daemon=True)
         self._engine_thread.start()
+
+    def _on_title_selected(self, titles_list: TrackmaTitlesList, provider_id: int) -> None:
+        ''' Callback for title selected
+        '''
+        logger.bind(**{'provider_id': provider_id}).debug('Title selected')
+        self.title_details.prepare_for(self._engine, provider_id)
 
     def _message_handler(self, classname: str, msgtype: int, msg: str) -> None:
         ''' Handle all messages incoming from the trackma engine class

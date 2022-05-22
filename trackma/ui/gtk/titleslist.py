@@ -16,7 +16,7 @@
 
 import threading
 import time
-from gi.repository import Gio, Gtk
+from gi.repository import Gio, GObject, Gtk
 from collections import deque
 from loguru import logger
 from trackma.engine import Engine
@@ -27,6 +27,9 @@ from typing import List
 
 
 class TrackmaTitlesListModel(Gtk.SortListModel):
+
+    __gtype_name__ = 'TrackmaTitlesListModel'
+
     def __init__(self):
         self.list_store = Gio.ListStore(item_type=TrackmaTitleDescription)
 
@@ -73,6 +76,14 @@ class TrackmaTitlesListModel(Gtk.SortListModel):
 
 
 class LazyLoadingThread(threading.Thread):
+    ''' Thread used to load all titles thumbnails
+
+        1. Create an instance and set a timeout
+        2. Run the thread
+        3. Replace the queue with new items when needed.
+        They will be executed after the timeout one by one, first in first out.
+    '''
+
     def __init__(self, timeout: float = None):
         super(LazyLoadingThread, self).__init__()
         self.name = "LazyLoadingThread"
@@ -95,9 +106,9 @@ class LazyLoadingThread(threading.Thread):
             if self.interruption_ocurred.wait(self.timeout):
                 self.interruption_ocurred.clear()
             elif len(self.queue) > 0:
-                self.execute_queue()
+                self._execute_queue()
 
-    def execute_queue(self) -> None:
+    def _execute_queue(self) -> None:
         ''' Process the current queue
         '''
         while len(self.queue) > 0 and not self.interruption_ocurred.is_set():
@@ -109,6 +120,10 @@ class LazyLoadingThread(threading.Thread):
 class TrackmaTitlesList(Gtk.Box):
 
     __gtype_name__ = 'TrackmaTitlesList'
+
+    __gsignals__ = {
+        'title-selected': (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_INT64,)),
+    }
 
     header_bar: Gtk.HeaderBar = Gtk.Template.Child()
     titles_list: Gtk.ListBox = Gtk.Template.Child()
@@ -125,6 +140,13 @@ class TrackmaTitlesList(Gtk.Box):
         self._covers_thread.start()
         self.titles_list.get_adjustment().connect(
             'value-changed', self._on_user_scroll)
+        self.titles_list.connect('row-selected', self._on_title_row_selected)
+
+    def _on_title_row_selected(self, list: Gtk.ListBox, row: TrackmaTitleRow, user_data=None) -> None:
+        if row is None:
+            return
+
+        self.emit('title-selected', row.description.provider_id)
 
     def _on_user_scroll(self, adjustment: Gtk.Adjustment, user_data=None) -> None:
         ''' Callback for user scroll

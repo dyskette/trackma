@@ -32,11 +32,56 @@
       <object class="AdwViewStack" id="view_stack">
         <child>
           <object class="AdwViewStackPage">
-            <property name="name">overview</property>
-            <property name="title">Overview</property>
+            <property name="name">unselected</property>
             <property name="child">
               <object class="AdwStatusPage">
-                <property name="title">Welcome!</property>
+                <property name="title">Select a title to view its details!</property>
+              </object>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwViewStackPage">
+            <property name="name">details</property>
+            <property name="child">
+              <object class="AdwStatusPage">
+                <property name="title">Title details!</property>
+
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+
+                    <child>
+                      <object class="GtkBox">
+                        <property name="margin-start">6</property>
+                        <property name="margin-end">6</property>
+                        <property name="margin-top">6</property>
+                        <property name="margin-bottom">6</property>
+                        <property name="width-request">132</property>
+                        <child>
+                          <object class="GtkPicture" id="cover">
+                            <property name="valign">start</property>
+                            <property name="halign">start</property>
+                            <property name="width-request">120</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="GtkLabel" id="title">
+                        <property name="xalign">0</property>
+                        <property name="wrap">True</property>
+                        <attributes>
+                          <attribute name="weight" value="bold"/>
+                        </attributes>
+                      </object>
+                    </child>
+
+                  </object>
+
+                </property>
               </object>
             </property>
           </object>

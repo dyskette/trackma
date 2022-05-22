@@ -40,7 +40,6 @@ class TrackmaWindow(Adw.ApplicationWindow):
 
             Args:
                 app (Adw.Application): the application instance
-                debug (bool): flag to show debugging information
         '''
         super().__init__(application=app)
 
@@ -107,6 +106,9 @@ class TrackmaWindow(Adw.ApplicationWindow):
             self.accounts_view.set_spinning(account_index.get_int32(), True, 1)
 
         def on_preparation_finished(succeeded: bool, reason: str):
+            ''' When the engine has loaded the account make the titles leaflet visible.
+                Otherwise show a notification about the error.
+            '''
             if succeeded:
                 self.leaflet.set_visible_child(self.titles_view)
             else:
