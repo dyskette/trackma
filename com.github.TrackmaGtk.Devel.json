@@ -1,15 +1,16 @@
 {
     "app-id" : "com.github.z411.TrackmaGtk.Devel",
     "runtime" : "org.gnome.Platform",
-    "runtime-version" : "master",
+    "runtime-version" : "43",
     "sdk" : "org.gnome.Sdk",
-    "command" : "trackma-gtk",
+    "command" : "trackma-wrapper",
     "finish-args" : [
         "--share=network",
         "--share=ipc",
         "--socket=fallback-x11",
         "--device=dri",
-        "--socket=wayland"
+        "--socket=wayland",
+        "--env=PYTHONPATH=/app/lib/python3.10/site-packages:/usr/lib/python3.10/site-packages"
     ],
     "cleanup" : [
         "/include",
@@ -22,41 +23,109 @@
         "*.la",
         "*.a"
     ],
+    "build-options" : {
+        "env" : {
+            "PYTHONPATH" : "/app/lib/python3.10/site-packages:/usr/lib/python3.10/site-packages"
+        }
+    },
     "modules" : [
         {
-            "name": "python-pillow",
+            "name": "trackma-dependencies",
             "buildsystem": "simple",
-            "ensure-writable" : [
-                "/lib/python*/site-packages/easy-install.pth"
-            ],
-            "build-commands": [
-                "python3 setup.py build",
-                "python3 setup.py install --prefix /app"
-            ],
-            "sources": [
+            "build-commands": [],
+            "modules": [
                 {
-                    "type": "archive",
-                    "url": "https://files.pythonhosted.org/packages/source/P/Pillow/Pillow-8.4.0.tar.gz",
-                    "sha256": "b8e2f83c56e141920c39464b852de3719dfbfb6e3c99a2d8da0edf4fb33176ed"
+                    "name": "python3-requests",
+                    "buildsystem": "simple",
+                    "build-commands": [
+                        "pip3 install --verbose --exists-action=i --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"requests\" --no-build-isolation"
+                    ],
+                    "sources": [
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/6f/de/5be2e3eed8426f871b170663333a0f627fc2924cc386cd41be065e7ea870/urllib3-1.26.12-py2.py3-none-any.whl",
+                            "sha256": "b930dd878d5a8afb066a637fbb35144fe7901e3b209d1cd4f524bd0e9deee997"
+                        },
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl",
+                            "sha256": "90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2"
+                        },
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/db/51/a507c856293ab05cdc1db77ff4bc1268ddd39f29e7dc4919aa497f0adbec/charset_normalizer-2.1.1-py3-none-any.whl",
+                            "sha256": "83e9a75d1911279afd89352c68b45348559d1fc0506b054b346651b5e7fee29f"
+                        },
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/1d/38/fa96a426e0c0e68aabc68e896584b83ad1eec779265a028e156ce509630e/certifi-2022.9.24-py3-none-any.whl",
+                            "sha256": "90c1a32f1d68f940488354e36370f6cca89f0f106db09518524c88d6ed83f382"
+                        },
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/ca/91/6d9b8ccacd0412c08820f72cebaa4f0c0441b5cda699c90f618b6f8a1b42/requests-2.28.1-py3-none-any.whl",
+                            "sha256": "8fefa2a1a1365bf5520aac41836fbee479da67864514bdb821f31ce07ce65349"
+                        }
+                    ]
+                },
+                {
+                    "name": "python3-Pillow",
+                    "buildsystem": "simple",
+                    "build-commands": [
+                        "pip3 install --verbose --exists-action=i --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"Pillow\" --no-build-isolation"
+                    ],
+                    "sources": [
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/8c/92/2975b464d9926dc667020ed1abfa6276e68c3571dcb77e43347e15ee9eed/Pillow-9.2.0.tar.gz",
+                            "sha256": "75e636fd3e0fb872693f23ccb8a5ff2cd578801251f3a4f6854c6a5d437d3c04"
+                        }
+                    ]
+                },
+                {
+                    "name": "python3-loguru",
+                    "buildsystem": "simple",
+                    "build-commands": [
+                        "pip3 install --verbose --exists-action=i --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"loguru\" --no-build-isolation"
+                    ],
+                    "sources": [
+                        {
+                            "type": "file",
+                            "url": "https://files.pythonhosted.org/packages/fe/21/e1d1da2586865a159fc73b611f36bdd50b6c4043cb6132d3d5e972988028/loguru-0.6.0-py3-none-any.whl",
+                            "sha256": "4e2414d534a2ab57573365b3e6d0234dfb1d84b68b7f3b948e6fb743860a77c3"
+                        }
+                    ]
                 }
             ]
+        },
+        {
+            "name": "wrapper",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -m755 trackma-wrapper /app/bin"
+            ],
+            "sources": [{
+                "type": "script",
+                "dest-filename": "trackma-wrapper",
+                "commands": [
+                    "trackma-gtk --debug"
+                ]
+            }]
         },
         {
             "name" : "trackma",
             "buildsystem" : "simple",
             "ensure-writable" : [
-                "/lib/python*/site-packages/easy-install.pth"
+                "/app/lib/python3.10/site-packages/easy-install.pth"
             ],
             "build-commands" : [
             	"python3 setup.py build",
-            	"python3 setup.py install --prefix /app"
+            	"python3 setup.py install --prefix=${FLATPAK_DEST} --root=/"
             ],
-            "sources" : [
-                {
-                    "type" : "git",
-                    "url" : "."
-                }
-            ]
+            "sources" : [{
+                "type" : "git",
+                "url" : "."
+            }]
         }
     ]
 }
