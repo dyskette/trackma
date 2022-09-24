@@ -43,11 +43,44 @@ class TrackmaTitleDetails(Gtk.Box):
             'details': engine.get_show_details(engine.get_show_info(provider_id))
             }).debug('Preparing details for show')
         self.description = TrackmaTitleDescription(engine.get_show_info(provider_id))
+        # Image cover
+        self.cover.set_pixbuf(self._get_pixbuf(self._download_cover(), 120))
+
+        # Title text
         self.title.set_label(self.description.title)
-        self.cover.set_pixbuf(self._get_pixbuf(self._download_file(), 120))
+
+        # Progress
+        # -1, +1, set number
+
+        # Score
+        # set number
+
+        # Status
+        # choose enum
+
+        # ----
+
+        # Romaji title
+
+        # Japanese title
+
+        # Synonim titles
+
+        # Genre
+
+        # Synopsis text
+
+        # Media type (TV, ONA, OVA, etc..)
+        
         self.view_stack.set_visible_child_name('details')
 
-    def _download_file(self) -> bytes:
+        # Average score
+
+        # Status text
+
+    def _download_cover(self) -> bytes:
+        ''' Download title cover file
+        '''
         response = requests.get(self.description.image)
 
         if response.status_code != 200:
@@ -58,6 +91,8 @@ class TrackmaTitleDetails(Gtk.Box):
         return response.content
 
     def _get_pixbuf(self, image_bytes: bytes, width: int) -> GdkPixbuf.Pixbuf:
+        ''' Convert an image in python bytes to a GdkPixbuf.Pixbuf
+        '''
         if not image_bytes:
             return None
 
