@@ -32,7 +32,6 @@ from trackma.ui.gtk.searchwindow import SearchWindow
 from trackma.ui.gtk.settingswindow import SettingsWindow
 from trackma.ui.gtk.showeventtype import ShowEventType
 from trackma.ui.gtk.showinfowindow import ShowInfoWindow
-from trackma.ui.gtk.statusicon import TrackmaStatusIcon
 
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/window.ui'))
@@ -51,14 +50,12 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         self._configfile = utils.to_config_path('ui-Gtk.json')
         self._config = utils.parse_config(self._configfile, utils.gtk_defaults)
 
-        self.statusicon = None
         self._main_view = None
         self._modals = []
 
         self._account = None
         self._engine = None
         self.close_thread = None
-        self.hidden = False
 
         self._init_widgets()
 
@@ -90,45 +87,12 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self._main_view.connect('show-action', self._on_show_action)
             self.add(self._main_view)
 
-        self.connect('delete_event', self._on_delete_event)
-
         builder = Gtk.Builder.new_from_file(
             os.path.join(gtk_dir, 'data/shortcuts.ui'))
         help_overlay = builder.get_object('shortcuts-window')
         self.set_help_overlay(help_overlay)
 
-        # Status icon
-        if TrackmaStatusIcon.is_tray_available():
-            self.statusicon = TrackmaStatusIcon()
-            self.statusicon.connect('hide-clicked', self._on_tray_hide_clicked)
-            self.statusicon.connect(
-                'about-clicked', self._on_tray_about_clicked)
-            self.statusicon.connect('quit-clicked', self._on_tray_quit_clicked)
-
-            if self._config['show_tray']:
-                self.statusicon.set_visible(True)
-            else:
-                self.statusicon.set_visible(False)
-
-        # Don't show the main window if start in tray option is set
-        if self.statusicon and self._config['show_tray'] and self._config['start_in_tray']:
-            self.hidden = True
-        else:
-            self.present()
-
-    def _on_tray_hide_clicked(self, status_icon):
-        self._destroy_modals()
-
-        if self.hidden:
-            self.deiconify()
-            self.present()
-
-            if not self._engine:
-                self._show_accounts(switch=False)
-        else:
-            self.hide()
-
-        self.hidden = not self.hidden
+        self.present()
 
     def _destroy_modals(self):
         self.get_help_overlay().hide()
@@ -137,20 +101,6 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             modal_window.destroy()
 
         self._modals = []
-
-    def _on_tray_about_clicked(self, status_icon):
-        self._on_about(None, None)
-
-    def _on_tray_quit_clicked(self, status_icon):
-        self._quit()
-
-    def _on_delete_event(self, widget, event, data=None):
-        if self.statusicon and self.statusicon.get_visible() and self._config['close_to_tray']:
-            self.hidden = True
-            self.hide()
-        else:
-            self._quit()
-        return True
 
     def _create_engine(self, account):
         self._engine = Engine(account, self._message_handler)
@@ -228,9 +178,6 @@ class TrackmaWindow(Gtk.ApplicationWindow):
 
         self.header_bar.set_subtitle(self._engine.api_info['name'] + " (" +
                                      self._engine.api_info['mediatype'] + ")")
-
-        if self.statusicon and self._config['tray_api_icon']:
-            self.statusicon.set_from_file(api_iconfile)
 
     def _on_change_mediatype(self, action, value):
         action.set_state(value)

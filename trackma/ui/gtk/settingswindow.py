@@ -20,7 +20,6 @@ from gi.repository import Gdk, Gtk, Pango
 
 from trackma import utils
 from trackma.ui.gtk import gtk_dir
-from trackma.ui.gtk.statusicon import TrackmaStatusIcon
 
 
 def reprColor(gdkColor):
@@ -95,10 +94,6 @@ class SettingsWindow(Gtk.Window):
     checkbox_auto_status_change_if_scored = Gtk.Template.Child()
     checkbox_auto_date_change = Gtk.Template.Child()
 
-    checkbox_show_tray = Gtk.Template.Child()
-    checkbox_close_to_tray = Gtk.Template.Child()
-    checkbox_start_in_tray = Gtk.Template.Child()
-    checkbox_tray_api_icon = Gtk.Template.Child()
     checkbox_remember_geometry = Gtk.Template.Child()
     checkbox_classic_progress = Gtk.Template.Child()
 
@@ -146,12 +141,6 @@ class SettingsWindow(Gtk.Window):
             "toggled", self._button_toggled, self.spinbutton_upload_size)
         self.checkbox_auto_status_change.connect(
             "toggled", self._button_toggled, self.checkbox_auto_status_change_if_scored)
-        self.checkbox_show_tray.connect(
-            "toggled", self._button_toggled, self.checkbox_close_to_tray)
-        self.checkbox_show_tray.connect(
-            "toggled", self._button_toggled, self.checkbox_start_in_tray)
-        self.checkbox_show_tray.connect(
-            "toggled", self._button_toggled, self.checkbox_tray_api_icon)
 
         self._load_config()
 
@@ -241,11 +230,6 @@ class SettingsWindow(Gtk.Window):
         self.checkbox_auto_date_change.set_active(
             self.engine.get_config('auto_date_change'))
 
-        self.checkbox_show_tray.set_active(self.config['show_tray'])
-        self.checkbox_close_to_tray.set_active(self.config['close_to_tray'])
-        self.checkbox_start_in_tray.set_active(self.config['start_in_tray'])
-        self.checkbox_tray_api_icon.set_active(self.config['tray_api_icon'])
-
         """GTK Interface configuration"""
         self.checkbox_remember_geometry.set_active(
             self.config['remember_geometry'])
@@ -265,20 +249,6 @@ class SettingsWindow(Gtk.Window):
                              self.spinbutton_upload_size)
         self._button_toggled(self.checkbox_auto_status_change,
                              self.checkbox_auto_status_change_if_scored)
-        self._button_toggled(self.checkbox_show_tray,
-                             self.checkbox_close_to_tray)
-        self._button_toggled(self.checkbox_show_tray,
-                             self.checkbox_start_in_tray)
-        self._button_toggled(self.checkbox_show_tray,
-                             self.checkbox_tray_api_icon)
-
-        if not TrackmaStatusIcon.is_tray_available():
-            self.checkbox_show_tray.set_label(
-                'Show tray icon (Not supported in this environment)')
-            self.checkbox_show_tray.set_sensitive(False)
-            self.checkbox_close_to_tray.set_sensitive(False)
-            self.checkbox_start_in_tray.set_sensitive(False)
-            self.checkbox_tray_api_icon.set_sensitive(False)
 
     def _button_toggled(self, widget, spin):
         spin.set_sensitive(widget.get_active())
@@ -455,17 +425,6 @@ class SettingsWindow(Gtk.Window):
         self.engine.save_config()
 
         """GTK Interface configuration"""
-        self.config['show_tray'] = self.checkbox_show_tray.get_active()
-
-        if self.checkbox_show_tray.get_active():
-            self.config['close_to_tray'] = self.checkbox_close_to_tray.get_active()
-            self.config['start_in_tray'] = self.checkbox_start_in_tray.get_active()
-            self.config['tray_api_icon'] = self.checkbox_tray_api_icon.get_active()
-        else:
-            self.config['close_to_tray'] = False
-            self.config['start_in_tray'] = False
-            self.config['tray_api_icon'] = False
-
         self.config['remember_geometry'] = self.checkbox_remember_geometry.get_active()
         self.config['episodebar_style'] = int(
             not self.checkbox_classic_progress.get_active())
