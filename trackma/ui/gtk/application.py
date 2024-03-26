@@ -15,8 +15,8 @@
 #
 from gi import require_version
 
-require_version('Gtk', '3.0')
-require_version('Gdk', '3.0')
+require_version('Gtk', '4.0')
+require_version('Gdk', '4.0')
 
 from trackma import utils  # noqa: E402
 from trackma.ui.gtk.window import TrackmaWindow  # noqa: E402
