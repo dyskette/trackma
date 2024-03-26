@@ -40,11 +40,11 @@ class TrackmaWindow(Gtk.ApplicationWindow):
 
     btn_appmenu = Gtk.Template.Child()
     btn_mediatype = Gtk.Template.Child()
-    header_bar = Gtk.Template.Child()
+    title = Gtk.Template.Child()
+    subtitle = Gtk.Template.Child()
 
     def __init__(self, app, debug=False):
-        Gtk.ApplicationWindow.__init__(self, application=app)
-        self.init_template()
+        super().__init__(application=app)
 
         self._debug = debug
         self._configfile = utils.to_config_path('ui-Gtk.json')
@@ -69,7 +69,8 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self._show_accounts(switch=False)
 
     def _init_widgets(self):
-        self.set_title('Trackma')
+        self.title.set_label('Trackma')
+        self.subtitle.set_property('visible', False)
 
         if self._config['remember_geometry']:
             self.resize(self._config['last_width'],
@@ -83,7 +84,7 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self._main_view.connect(
                 'error-fatal', self._on_main_view_error_fatal)
             self._main_view.connect('show-action', self._on_show_action)
-            self.add(self._main_view)
+            self.set_child(self._main_view)
 
         builder = Gtk.Builder.new_from_file(
             os.path.join(gtk_dir, 'data/shortcuts.ui'))
@@ -119,10 +120,18 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self.get_application().set_menubar(builder.get_object('menu-bar'))
             self.btn_appmenu.set_property('visible', False)
 
+        show_group = Gio.SimpleActionGroup()
+        self.insert_action_group('show', show_group)
+
         def add_action(name, callback):
             action = Gio.SimpleAction.new(name, None)
             action.connect('activate', callback)
             self.add_action(action)
+
+        def add_show_action(name, callback):
+            action = Gio.SimpleAction(name=name)
+            action.connect('activate', callback)
+            show_group.add_action(action)
 
         add_action('search', self._on_search)
         add_action('synchronize', self._on_synchronize)
@@ -133,12 +142,20 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         add_action('preferences', self._on_preferences)
         add_action('about', self._on_about)
 
-        add_action('play_next', self._on_action_play_next)
-        add_action('play_random', self._on_action_play_random)
-        add_action('episode_add', self._on_action_episode_add)
-        add_action('episode_remove', self._on_action_episode_remove)
-        add_action('delete', self._on_action_delete)
-        add_action('copy', self._on_action_copy)
+        add_show_action('play_next', self._on_action_play_next)
+        play_action = Gio.SimpleAction(name='play_episode', parameter_type=GLib.VariantType('s'))
+        play_action.connect('activate', self._on_action_play_episode)
+        show_group.add_action(play_action)
+        add_show_action('play_random', self._on_action_play_random)
+        add_show_action('episode_add', self._on_action_episode_add)
+        add_show_action('episode_remove', self._on_action_episode_remove)
+
+        add_show_action('details', self._on_action_details)
+        add_show_action('open_website', self._on_action_open_website)
+        add_show_action('open_folder', self._on_action_open_folder)
+        add_show_action('copy_title', self._on_action_copy_title)
+        add_show_action('change_alternative_title', self._on_action_change_alternative_title)
+        add_show_action('delete', self._on_action_delete)
 
     def _set_mediatypes_action(self):
         action_name = 'change-mediatype'
@@ -170,19 +187,16 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self.btn_mediatype.hide()
 
     def _update_widgets(self, account):
-        current_api = utils.available_libs[account['api']]
-        api_iconpath = 1
-        api_iconfile = current_api[api_iconpath]
-
-        self.header_bar.set_subtitle(self._engine.api_info['name'] + " (" +
-                                     self._engine.api_info['mediatype'] + ")")
+        self.subtitle.set_text(self._engine.api_info['name'] + " (" +
+                               self._engine.api_info['mediatype'] + ")")
+        self.subtitle.set_visible(True)
 
     def _on_change_mediatype(self, action, value):
         action.set_state(value)
         mediatype = value.get_string()
         self._set_buttons_sensitive(False)
         self._main_view.load_account_mediatype(
-            None, mediatype, self.header_bar)
+            None, mediatype, None)
 
     def _on_search(self, action, param):
         current_status = self._main_view.get_current_status()
@@ -216,14 +230,18 @@ class TrackmaWindow(Gtk.ApplicationWindow):
                 _download_lists()
 
         queue = self._engine.get_queue()
+
         if queue:
-            dialog = Gtk.MessageDialog(self,
-                                       Gtk.DialogFlags.MODAL,
-                                       Gtk.MessageType.QUESTION,
-                                       Gtk.ButtonsType.YES_NO,
-                                       "There are %d queued changes in your list. If you retrieve the remote list now you will lose your queued changes. Are you sure you want to continue?" % len(queue))
-            dialog.show_all()
+            dialog = Gtk.MessageDialog(
+               destroy_with_parent=True,
+               message_type=Gtk.MessageType.QUESTION,
+               buttons=Gtk.ButtonsType.YES_NO,
+               text="There are %d queued changes in your list. If you retrieve the remote list now you will lose your queued changes. Are you sure you want to continue?" % len(queue))
+
+            dialog.set_transient_for(self)
+            dialog.set_modal(True)
             dialog.connect("response", _on_download_response)
+            dialog.set_visible(True)
         else:
             # If the user doesn't have any queued changes
             # just go ahead
@@ -319,6 +337,11 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         about.set_modal(True)
         about.set_transient_for(self)
         about.set_program_name("Trackma GTK")
+
+        filename = utils.DATADIR + '/icon.png'
+        pixbuf = Gdk.Texture.new_from_filename(filename)
+        about.set_logo(pixbuf)
+
         about.set_version(utils.VERSION)
         about.set_license_type(Gtk.License.GPL_3_0_ONLY)
         about.set_comments(
@@ -328,7 +351,7 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         about.set_authors(["See AUTHORS file"])
         about.set_artists(["shuuichi"])
         about.connect('destroy', self._on_modal_destroy)
-        about.connect('response', lambda dialog, response: dialog.destroy())
+        about.connect('close-request', lambda dialog: dialog.destroy())
         about.present()
         self._modals.append(about)
 
@@ -381,16 +404,20 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         GLib.idle_add(self._error_dialog, msg, icon)
 
     def _error_dialog(self, msg, icon=Gtk.MessageType.ERROR):
-        def error_dialog_response(widget, response_id):
-            widget.destroy()
+        def error_dialog_response(_dialog, response_id):
+            _dialog.destroy()
 
-        dialog = Gtk.MessageDialog(self,
-                                   Gtk.DialogFlags.MODAL,
-                                   icon,
-                                   Gtk.ButtonsType.OK,
-                                   str(msg))
-        dialog.show_all()
+        dialog = Gtk.MessageDialog(
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text=str(msg))
+
+        dialog.set_transient_for(self)
+        dialog.set_modal(True)
+
         dialog.connect("response", error_dialog_response)
+        dialog.set_visible(True)
         print('Error: {}'.format(msg))
 
     def _on_action_play_next(self, action, param):
@@ -398,6 +425,13 @@ class TrackmaWindow(Gtk.ApplicationWindow):
 
         if selected_show:
             self._play_next(selected_show)
+
+    def _on_action_play_episode(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+        episode = param.get_string()
+
+        if selected_show and episode:
+            self._play_episode(selected_show, episode)
 
     def _on_action_play_random(self, action, param):
         self._play_random()
@@ -414,17 +448,41 @@ class TrackmaWindow(Gtk.ApplicationWindow):
         if selected_show:
             self._episode_remove(selected_show)
 
+    def _on_action_details(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+
+        if selected_show:
+            self._open_details(selected_show)
+
+    def _on_action_open_website(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+
+        if selected_show:
+            self._open_website(selected_show)
+
+    def _on_action_open_folder(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+
+        if selected_show:
+            self._open_folder(selected_show)
+
+    def _on_action_copy_title(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+
+        if selected_show:
+            self._copy_title(selected_show)
+
+    def _on_action_change_alternative_title(self, action, param):
+        selected_show = self._main_view.get_selected_show()
+
+        if selected_show:
+            self._change_alternative_title(selected_show)
+
     def _on_action_delete(self, action, param):
         selected_show = self._main_view.get_selected_show()
 
         if selected_show:
             self._remove_show(selected_show)
-
-    def _on_action_copy(self, action, param):
-        selected_show = self._main_view.get_selected_show()
-
-        if selected_show:
-            self._copy_title(selected_show)
 
     def _on_show_action(self, main_view, event_type, data):
         if event_type == ShowEventType.PLAY_NEXT:
@@ -515,7 +573,9 @@ class TrackmaWindow(Gtk.ApplicationWindow):
     def _open_website(self, show_id):
         show = self._engine.get_show_info(show_id)
         if show['url']:
-            Gtk.show_uri(None, show['url'], Gdk.CURRENT_TIME)
+            launcher = Gtk.UriLauncher()
+            launcher.set_uri(show['url'])
+            launcher.launch()
 
     def _open_folder(self, show_id):
         show = self._engine.get_show_info(show_id)
@@ -544,44 +604,57 @@ class TrackmaWindow(Gtk.ApplicationWindow):
 
     def _copy_title(self, show_id):
         show = self._engine.get_show_info(show_id)
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(show['title'], -1)
+        clipboard = Gdk.Display.get_default().get_clipboard()
+        clipboard.set(show['title'])
 
         self._main_view.set_status_idle('Title copied to clipboard.')
 
     def _change_alternative_title(self, show_id):
-        show = self._engine.get_show_info(show_id)
-        current_altname = self._engine.altname(show_id)
 
-        def altname_response(entry, dialog, response):
-            dialog.response(response)
+        def on_title_dialog_response(_dialog, response):
+            _dialog.destroy()
+
+            if response == Gtk.ResponseType.OK:
+                show = self._engine.get_show_info(show_id)
+                text = entry.get_text()
+                self._engine.altname(show_id, text)
+                self._main_view.change_show_title_idle(show, text)
 
         dialog = Gtk.MessageDialog(
-            self,
-            Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            Gtk.MessageType.QUESTION,
-            Gtk.ButtonsType.OK_CANCEL,
-            None)
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text=None)
+
+        dialog.set_transient_for(self)
+        dialog.set_modal(True)
+        dialog.connect("response", on_title_dialog_response)
+
+        content_area_box = dialog.get_content_area()
+        content_area_box.set_margin_start(18)
+        content_area_box.set_margin_end(18)
+
         dialog.set_markup('Set the <b>alternate title</b> for the show.')
+        content_area_box.append(Gtk.Label(label="Use this if the tracker is unable to find this show. Leave blank to disable."))
+
+        hbox = Gtk.Box()
+        hbox.set_orientation(Gtk.Orientation.HORIZONTAL)
+        hbox.set_spacing(9)
+        hbox.append(Gtk.Label(label="Alternate title:"))
+
+        def altname_response(entry):
+            dialog.response(Gtk.ResponseType.OK)
+
         entry = Gtk.Entry()
-        entry.set_text(current_altname)
-        entry.connect("activate", altname_response,
-                      dialog, Gtk.ResponseType.OK)
-        hbox = Gtk.HBox()
-        hbox.pack_start(Gtk.Label("Alternate Title:"), False, 5, 5)
-        hbox.pack_end(entry, True, True, 0)
-        dialog.format_secondary_markup(
-            "Use this if the tracker is unable to find this show. Leave blank to disable.")
-        dialog.vbox.pack_end(hbox, True, True, 0)
-        dialog.show_all()
-        retval = dialog.run()
+        entry.set_text(self._engine.altname(show_id))
+        entry.set_hexpand(True)
+        entry.connect("notify::active", altname_response)
 
-        if retval == Gtk.ResponseType.OK:
-            text = entry.get_text()
-            self._engine.altname(show_id, text)
-            self._main_view.change_show_title_idle(show, text)
+        hbox.append(entry)
 
-        dialog.destroy()
+        content_area_box.append(hbox)
+
+        dialog.set_visible(True)
 
     def _remove_show(self, show_id):
         try:
