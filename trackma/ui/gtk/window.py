@@ -69,8 +69,6 @@ class TrackmaWindow(Gtk.ApplicationWindow):
             self._show_accounts(switch=False)
 
     def _init_widgets(self):
-        Gtk.Window.set_default_icon_from_file(utils.DATADIR + '/icon.png')
-        self.set_position(Gtk.WindowPosition.CENTER)
         self.set_title('Trackma')
 
         if self._config['remember_geometry']:
