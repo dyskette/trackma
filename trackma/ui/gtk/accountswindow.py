@@ -15,7 +15,6 @@
 #
 
 import os
-import webbrowser
 from enum import Enum
 
 from gi.repository import GObject, GdkPixbuf, Gtk
@@ -59,11 +58,8 @@ class AccountsWindow(Gtk.Dialog):
     btn_pin_request = Gtk.Template.Child()
 
     def __init__(self, manager, transient_for=None):
-        Gtk.Dialog.__init__(self, use_header_bar=True,
-                            transient_for=transient_for)
-        self.init_template()
+        super().__init__(use_header_bar=True, transient_for=transient_for)
 
-        self.accounts = []
         self.pixbufs = {}
         self.treeiters = {}
         self.current = AccountsView.LIST
@@ -73,15 +69,11 @@ class AccountsWindow(Gtk.Dialog):
         self.adding_allow = False
         self.adding_extra = {}
 
-        self._remove_border()
         self._add_separators()
         self._refresh_remember()
         self._refresh_pixbufs()
         self._refresh_list()
         self._populate_combobox()
-
-    def _remove_border(self):
-        self.internal_box.set_border_width(0)
 
     def _add_separators(self):
         self.accounts_listbox.set_header_func(
@@ -109,10 +101,8 @@ class AccountsWindow(Gtk.Dialog):
             self.pixbufs[libname] = GdkPixbuf.Pixbuf.new_from_file(lib[1])
 
     def _refresh_list(self):
-        for account in self.accounts:
-            account.destroy()
-
-        self.accounts = []
+        self.accounts_listbox.remove_all()
+        has_rows = False
 
         for k, account in self.manager.get_accounts():
             libname = account['api']
@@ -138,13 +128,10 @@ class AccountsWindow(Gtk.Dialog):
                     'active': False
                 })
 
-            self.accounts_listbox.add(account)
-            self.accounts.append(account)
+            self.accounts_listbox.append(account)
+            has_rows = True
 
-        if not self.accounts:
-            self.accounts_frame.hide()
-        else:
-            self.accounts_frame.show()
+        self.accounts_frame.set_visible(has_rows)
 
     @Gtk.Template.Callback()
     def _on_dialog_close(self, dialog):
@@ -183,7 +170,7 @@ class AccountsWindow(Gtk.Dialog):
     def _on_btn_delete_clicked(self, btn):
         row = self.accounts_listbox.get_selected_row()
         self.manager.delete_account(row.get_account_id())
-        row.destroy()
+        self.accounts_listbox.remove(row)
 
     @Gtk.Template.Callback()
     def _on_btn_add_clicked(self, btn):
@@ -225,11 +212,11 @@ class AccountsWindow(Gtk.Dialog):
         self.accounts_combo.set_sensitive(False)
         self.username_entry.set_sensitive(False)
 
-        self.btn_new_confirm.hide()
-        self.btn_new_cancel.show()
-        self.btn_edit_confirm.show()
-        self.btn_add.hide()
-        self.btn_cancel.hide()
+        self.btn_new_confirm.set_visible(False)
+        self.btn_new_cancel.set_visible(True)
+        self.btn_edit_confirm.set_visible(True)
+        self.btn_add.set_visible(False)
+        self.btn_cancel.set_visible(False)
 
         self.current = AccountsView.EDIT
         self.accounts_stack.set_visible_child_full(
@@ -238,10 +225,10 @@ class AccountsWindow(Gtk.Dialog):
     def _show_add_new(self):
         self.set_title("Add account")
         self._clear_new_account()
-        self.btn_new_confirm.show()
-        self.btn_new_cancel.show()
-        self.btn_add.hide()
-        self.btn_cancel.hide()
+        self.btn_new_confirm.set_visible(True)
+        self.btn_new_cancel.set_visible(True)
+        self.btn_add.set_visible(False)
+        self.btn_cancel.set_visible(False)
         self.accounts_combo.set_sensitive(True)
         self.username_entry.set_sensitive(True)
 
@@ -251,11 +238,11 @@ class AccountsWindow(Gtk.Dialog):
 
     def _show_accounts_list(self):
         self.set_title("Accounts")
-        self.btn_new_confirm.hide()
-        self.btn_new_cancel.hide()
-        self.btn_edit_confirm.hide()
-        self.btn_add.show()
-        self.btn_cancel.show()
+        self.btn_new_confirm.set_visible(False)
+        self.btn_new_cancel.set_visible(False)
+        self.btn_edit_confirm.set_visible(False)
+        self.btn_add.set_visible(True)
+        self.btn_cancel.set_visible(True)
 
         self.current = AccountsView.LIST
         self.accounts_stack.set_visible_child_full(
@@ -294,7 +281,9 @@ class AccountsWindow(Gtk.Dialog):
             auth_url = auth_url % self.adding_extra['code_verifier']
 
         self.adding_allow = True
-        webbrowser.open(auth_url, 2, True)
+        launcher = Gtk.UriLauncher()
+        launcher.set_uri(auth_url)
+        launcher.launch()
 
     def _clear_new_account(self):
         self.accounts_combo.set_active_id(None)
@@ -304,14 +293,12 @@ class AccountsWindow(Gtk.Dialog):
     def _show_oauth_account(self):
         self.username_label.set_text("Name")
         self.password_label.set_text("PIN")
-        self.password_entry.set_visibility(True)
         self.btn_pin_request.show()
 
     def _show_password_account(self):
         self.username_label.set_text("Username")
         self.password_label.set_text("Password")
-        self.password_entry.set_visibility(False)
-        self.btn_pin_request.hide()
+        self.btn_pin_request.set_visible(False)
 
     def _get_combo_active_api_name(self):
         apiiter = self.accounts_combo.get_active_iter()
@@ -377,8 +364,7 @@ class AccountRow(Gtk.ListBoxRow):
     account_api = Gtk.Template.Child()
 
     def __init__(self, account):
-        Gtk.ListBoxRow.__init__(self)
-        self.init_template()
+        super().__init__()
         self.account = account
 
         if account['active']:
