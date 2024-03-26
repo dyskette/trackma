@@ -284,16 +284,20 @@ files = [
 
 [[package]]
 name = "pygobject"
-version = "3.42.2"
+version = "3.48.1"
 description = "Python bindings for GObject Introspection"
 optional = true
-python-versions = ">=3.6, <4"
+python-versions = "<4,>=3.8"
 files = [
-    {file = "PyGObject-3.42.2.tar.gz", hash = "sha256:21524cef33100c8fd59dc135948b703d79d303e368ce71fa60521cc971cd8aa7"},
+    {file = "pygobject-3.48.1.tar.gz", hash = "sha256:2c4cd7c805ee9e727904172423a7519338017fd7e122b62218ac211627436875"},
 ]
 
 [package.dependencies]
-pycairo = ">=1.16,<2.0"
+pycairo = ">=1.16"
+
+[package.extras]
+dev = ["flake8", "pytest", "pytest-cov"]
+docs = ["sphinx (>=4.0,<5.0)", "sphinx-rtd-theme (>=0.5,<2.0)"]
 
 [[package]]
 name = "pyinotify"
@@ -468,4 +472,4 @@ ui = ["pillow", "pycairo", "pygobject", "pyqt5", "urwid"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "a2397940e92875df0212b6bdda7eaf3848d76aff0a97178f8ff81f06d43ef681"
+content-hash = "ca84b0f536de366e094f9c1ff8880e55db06d68dd3ae0ff10dbcb0475c05e4aa"

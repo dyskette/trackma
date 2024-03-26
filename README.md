@@ -59,7 +59,7 @@ The following user interfaces are available and their requirements are as follow
 | UI | Dependencies |
 | --- | --- |
 | Qt | PyQt5 (`python-pyqt5`) |
-| GTK 3 | PyGI (`python3-gi` and `python3-cairo`) |
+| GTK 4 | PyGObject (`python3-gi`, `python3-gi-cairo` and `gir1.2-gtk-4.0`) |
 | curses | Urwid (`python3-urwid`) |
 | CLI | None |
 
