@@ -34,8 +34,7 @@ class ShowInfoBox(Gtk.Box):
     image_container = Gtk.Template.Child()
 
     def __init__(self, engine, orientation=Gtk.Orientation.HORIZONTAL):
-        Gtk.Box.__init__(self)
-        self.init_template()
+        super().__init__()
 
         self._engine = engine
         self._show = None
@@ -45,15 +44,15 @@ class ShowInfoBox(Gtk.Box):
 
         self.image_box = ImageBox(225, 300)
         self.image_box.show()
-        self.image_container.pack_start(self.image_box, False, False, 0)
+        self.image_container.append(self.image_box)
 
-        self.data_label = Gtk.Label('')
-        self.data_label.set_line_wrap(True)
+        self.data_label = Gtk.Label.new('')
+        self.data_label.set_wrap(True)
         self.data_label.set_property('selectable', True)
 
         if isinstance(orientation, Gtk.Orientation):
             self.data_container.set_orientation(orientation)
-        self.data_container.pack_start(self.data_label, True, True, 0)
+        self.data_container.append(self.data_label)
 
     def set_size(self, w, h):
         self.scrolled_sidebox.set_size_request(w, h)
