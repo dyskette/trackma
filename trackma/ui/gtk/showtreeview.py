@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import GObject, Gdk, Gtk, Pango
+from gi.repository import GObject, Gdk, Gtk, Pango, Graphene
 
 from trackma import utils
 
@@ -208,7 +208,7 @@ class ShowTreeView(Gtk.TreeView):
                                        GObject.TYPE_PYOBJECT, (GObject.TYPE_STRING, GObject.TYPE_BOOLEAN))}
 
     def __init__(self, colors, visible_columns, progress_style=1):
-        Gtk.TreeView.__init__(self)
+        super().__init__()
 
         self.colors = colors
         self.visible_columns = visible_columns
@@ -236,8 +236,8 @@ class ShowTreeView(Gtk.TreeView):
             self.cols[name].set_sort_column_id(sort)
 
             # This is a hack to allow for right-clickable header
-            label = Gtk.Label(name)
-            label.show()
+            label = Gtk.Label()
+            label.set_label(name)
             self.cols[name].set_widget(label)
 
             self.append_column(self.cols[name])
@@ -246,7 +246,8 @@ class ShowTreeView(Gtk.TreeView):
             while not isinstance(w, Gtk.Button):
                 w = w.get_parent()
 
-            w.connect('button-press-event', self._header_button_press)
+            # TODO: Fix notebook column context menu to hide and show columns
+            # w.connect('button-press-event', self._header_button_press)
 
             if name not in self.visible_columns:
                 self.cols[name].set_visible(False)
@@ -325,17 +326,19 @@ class ShowTreeView(Gtk.TreeView):
         return self.props.model.props.model
 
     def show_tooltip(self, view, x, y, kbd, tip):
-        (has_path, tx, ty,
-         model, path, tree_iter) = view.get_tooltip_context(x, y, kbd)
-        if not has_path:
+        bin_x, bin_y = self.convert_widget_to_bin_window_coords(x, y)
+        path_result = view.get_path_at_pos(bin_x, bin_y)
+
+        if not path_result:
             return False
 
-        _, col, _, _ = view.get_path_at_pos(tx, ty)
+        path, col, cell_x, cell_y = path_result
         if col != self.cols['Percent']:
             return False
 
         def gv(key):
-            return model.get_value(tree_iter, ShowListStore.column(key))
+            tree_iter = self.get_model().get_iter(path)
+            return self.get_model().get_value(tree_iter, ShowListStore.column(key))
 
         lines = []
         lines.append("Watched: %d" % gv('stat'))
@@ -397,7 +400,7 @@ class ProgressCellRenderer(Gtk.CellRenderer):
     }
 
     def __init__(self, colors):
-        Gtk.CellRenderer.__init__(self)
+        super().__init__()
         self.colors = colors
         self.value = self.get_property("value")
         self.subvalue = self.get_property("subvalue")
@@ -418,13 +421,10 @@ class ProgressCellRenderer(Gtk.CellRenderer):
     def do_get_property(self, pspec):
         return getattr(self, pspec.name)
 
-    def do_render(self, cr, widget, background_area, cell_area, flags):
+    def do_snapshot(self, snapshot, widget, background_area, cell_area, flags):
         (x, y, w, h) = self.do_get_size(widget, cell_area)
 
-        # set_source_rgb(0.9, 0.9, 0.9)
-        cr.set_source_rgb(*self.__get_color(self.colors['progress_bg']))
-        cr.rectangle(x, y, w, h)
-        cr.fill()
+        self.snapshot_append_color(snapshot, self.colors['progress_bg'], x, y, w, h)
 
         if not self.total:
             return
@@ -435,37 +435,21 @@ class ProgressCellRenderer(Gtk.CellRenderer):
             else:
                 mid = int(w / float(self.total) * self.subvalue)
 
-            # set_source_rgb(0.7, 0.7, 0.7)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_bg']))
-            cr.rectangle(x, y+h-self._subheight, mid, h-(h-self._subheight))
-            cr.fill()
+            self.snapshot_append_color(snapshot, self.colors['progress_sub_bg'], x, y+h-self._subheight, mid, h-(h-self._subheight))
 
         if self.value:
             if self.value >= self.total:
-                # set_source_rgb(0.6, 0.8, 0.7)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_complete']))
-                cr.rectangle(x, y, w, h)
+                self.snapshot_append_color(snapshot, self.colors['progress_complete'], x, y, w, h)
             else:
                 mid = int(w / float(self.total) * self.value)
-                # set_source_rgb(0.6, 0.7, 0.8)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_fg']))
-                cr.rectangle(x, y, mid, h)
-            cr.fill()
+                self.snapshot_append_color(snapshot, self.colors['progress_fg'], x, y, mid, h)
 
         if self.eps:
-            # set_source_rgb(0.4, 0.5, 0.6)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_fg']))
             for episode in self.eps:
                 if 0 < episode <= self.total:
                     start = int(w / float(self.total) * (episode - 1))
                     finish = int(w / float(self.total) * episode)
-                    cr.rectangle(x+start, y+h-self._subheight,
-                                 finish-start, h-(h-self._subheight))
-                    cr.fill()
+                    self.snapshot_append_color(snapshot, self.colors['progress_sub_fg'], x+start, y+h-self._subheight, finish-start, h-(h-self._subheight))
 
     def do_get_size(self, widget, cell_area):
         if cell_area is None:
@@ -475,6 +459,13 @@ class ProgressCellRenderer(Gtk.CellRenderer):
         w = cell_area.width
         h = cell_area.height
         return x, y, w, h
+
+    def snapshot_append_color(self, snapshot, color, x, y, w, h):
+        rgba_color = Gdk.RGBA()
+        rgba_color.parse(color)
+        rectangle = Graphene.Rect()
+        rectangle.init(x, y, w, h)
+        snapshot.append_color(rgba_color, rectangle)
 
     @staticmethod
     def __get_color(color_string):
