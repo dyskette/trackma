@@ -32,7 +32,7 @@ except ImportError:
 
 class ImageThread(threading.Thread):
     def __init__(self, url, filename, width, height, callback):
-        threading.Thread.__init__(self)
+        super().__init__()
         self._url = url
         self._filename = filename
         self._width = width
@@ -68,9 +68,9 @@ class ImageThread(threading.Thread):
         self._stop_request.set()
 
 
-class ImageBox(Gtk.HBox):
+class ImageBox(Gtk.Box):
     def __init__(self, width, height):
-        Gtk.HBox.__init__(self)
+        super().__init__()
 
         self._width = width
         self._height = height
@@ -84,10 +84,10 @@ class ImageBox(Gtk.HBox):
         self._image_thread = None
 
         if imaging_available:
-            self.pack_start(self._label_holder, False, False, 0)
-            self.pack_start(self._image, False, False, 0)
+            self.prepend(self._label_holder)
+            self.prepend(self._image)
         else:
-            self.pack_start(self._label_holder, False, False, 0)
+            self.prepend(self._label_holder)
 
         self.reset()
 
