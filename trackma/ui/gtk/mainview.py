@@ -18,7 +18,7 @@ import html
 import os
 import threading
 
-from gi.repository import GLib, GObject, Gdk, Gtk
+from gi.repository import GLib, GObject, Gdk, Gtk, Gio
 
 from trackma import messenger
 from trackma import utils
@@ -57,14 +57,14 @@ class MainView(Gtk.Box):
     btn_episode_add = Gtk.Template.Child()
     btn_play_next = Gtk.Template.Child()
     spinbtn_score = Gtk.Template.Child()
+    spinbtn_score_controller_key = Gtk.EventControllerKey()
     btn_score_set = Gtk.Template.Child()
     statusbox = Gtk.Template.Child()
     statusmodel = Gtk.Template.Child()
     notebook = Gtk.Template.Child()
 
     def __init__(self, config, debug=False):
-        Gtk.Box.__init__(self)
-        self.init_template()
+        super().__init__()
 
         self._configfile = utils.to_config_path('ui-Gtk.json')
         self._config = config
@@ -99,36 +99,35 @@ class MainView(Gtk.Box):
 
     def _init_widgets(self):
         self.image_box = ImageBox(100, 150)
-        self.image_box.show()
-        self.image_container_box.pack_start(self.image_box, False, False, 0)
+        self.image_container_box.prepend(self.image_box)
 
         self.notebook.set_scrollable(True)
-        self.notebook.add_events(Gdk.EventMask.SCROLL_MASK |
-                                 Gdk.EventMask.SMOOTH_SCROLL_MASK)
-        self.notebook.connect('scroll-event', self._notebook_handle_events)
-        self.notebook.connect('enter-notify-event',
-                              self._notebook_handle_events)
-        self.notebook.connect('leave-notify-event',
-                              self._notebook_handle_events)
+        # TODO: Make tabs scrollable
+        # self.notebook.add_events(Gdk.EventMask.SCROLL_MASK |
+        #                          Gdk.EventMask.SMOOTH_SCROLL_MASK)
+        # self.notebook.connect('scroll-event', self._notebook_handle_events)
+        # self.notebook.connect('enter-notify-event',
+        #                       self._notebook_handle_events)
+        # self.notebook.connect('leave-notify-event',
+        #                       self._notebook_handle_events)
 
         self.statusbar = Gtk.Statusbar()
         self.statusbar.push(0, 'Trackma GTK ' + utils.VERSION)
-        self.statusbar.show()
-        self.pack_start(self.statusbar, False, False, 0)
+        self.append(self.statusbar)
 
     def _init_signals(self):
         self.btn_episode_remove.connect(
             "clicked", self._on_btn_episode_remove_clicked)
         self.btn_episode_show_entry.connect(
-            "clicked", self._show_episode_entry)
+            "notify::active", self._show_episode_entry)
         self.entry_episode.connect("activate", self._on_entry_episode_activate)
         self.entry_done.connect("clicked", self._on_entry_episode_activate)
-        self.entry_popover.connect("focus-out-event", self._hide_episode_entry)
         self.btn_episode_add.connect(
             "clicked", self._on_btn_episode_add_clicked)
         self.btn_play_next.connect(
             "clicked", self._on_btn_play_next_clicked, True)
-        self.spinbtn_score.connect("activate", self._on_spinbtn_score_activate)
+        self.spinbtn_score_controller_key.connect('key-released', self.spinbtn_score_key_pressed)
+        self.spinbtn_score.add_controller(self.spinbtn_score_controller_key)
         self.btn_score_set.connect("clicked", self._on_spinbtn_score_activate)
         self.statusbox_handler = self.statusbox.connect(
             "changed", self._on_statusbox_changed)
@@ -185,6 +184,7 @@ class MainView(Gtk.Box):
         self.statusbox.handler_block(self.statusbox_handler)
         self._reset_widgets()
         self._create_notebook_pages()
+        self._update_widgets_for_selected_show()
         self._set_score_ranges()
         self.populate_all_pages()
         self._populate_statusbox()
@@ -217,6 +217,7 @@ class MainView(Gtk.Box):
         self.entry_episode.set_sensitive(can_update)
         self.entry_done.set_sensitive(can_update)
         self.btn_episode_add.set_sensitive(can_update)
+        self.btn_episode_remove.set_sensitive(can_update)
 
     def _notebook_handle_events(self, widget, event):
         if event.type in (Gdk.EventType.LEAVE_NOTIFY, Gdk.EventType.ENTER_NOTIFY):
@@ -243,6 +244,7 @@ class MainView(Gtk.Box):
 
         self._pages = {}
         self._page_handler_ids = {}
+        self._current_page = None
 
         # Insert pages
         for status in statuses_nums:
@@ -261,17 +263,16 @@ class MainView(Gtk.Box):
                 self._pages[status].connect('show-action', self._on_show_action))
             self._page_handler_ids[status].append(
                 self._pages[status].connect('column-toggled', self._on_column_toggled))
-            self.notebook.append_page(self._pages[status],
-                                      page_title)
+            self.notebook.append_page(self._pages[status], page_title)
+
+            if self._current_page is None:
+                self._current_page = self._pages[status]
 
         self.notebook.handler_unblock(self.notebook_switch_handler)
-        self.notebook.show_all()
 
     def populate_all_pages(self):
         for status in self._pages:
             self._block_handlers_for_status(status)
-            tree_view = self._pages[status].show_tree_view
-            tree_view.freeze_child_notify()
 
         self._list.clear()
         library = self._engine.library()
@@ -282,8 +283,6 @@ class MainView(Gtk.Box):
 
         self._list.set_sort_column_id(1, Gtk.SortType.ASCENDING)
         for status in self._pages:
-            tree_view = self._pages[status].show_tree_view
-            tree_view.thaw_child_notify()
             self._unblock_handlers_for_status(status)
 
     def _block_handlers_for_status(self, status):
@@ -302,7 +301,6 @@ class MainView(Gtk.Box):
         for status in statuses_nums:
             self.statusmodel.append([str(status), statuses_names[status]])
         self.statusbox.set_model(self.statusmodel)
-        self.statusbox.show_all()
 
     def _set_score_ranges(self):
         score_decimal_places = 0
@@ -355,11 +353,8 @@ class MainView(Gtk.Box):
                   ShowEventType.EPISODE_REMOVE,
                   (self._current_page.selected_show,))
 
-    def _show_episode_entry(self, widget):
-        self.entry_popover.set_relative_to(widget)
-        self.entry_popover.set_position(Gtk.PositionType.BOTTOM)
+    def _show_episode_entry(self, button, gparam_active):
         self.entry_episode.set_text(self.btn_episode_show_entry.get_label())
-        self.entry_popover.show()
         self.entry_episode.grab_focus()
 
     def _on_entry_episode_activate(self, widget):
@@ -384,6 +379,10 @@ class MainView(Gtk.Box):
         self.emit('show-action',
                   ShowEventType.PLAY_NEXT,
                   (self._current_page.selected_show,))
+
+    def spinbtn_score_key_pressed(self, controller, keyval, keycode, state):
+        if keyval == Gdk.keyval_from_name('Return'):
+            self._on_spinbtn_score_activate(None)
 
     def _on_spinbtn_score_activate(self, widget):
         score = self.spinbtn_score.get_value()
@@ -453,14 +452,17 @@ class MainView(Gtk.Box):
         GLib.idle_add(self._prompt_update_next, show, played_ep)
 
     def _prompt_update_next(self, show, played_ep):
-        dialog = Gtk.MessageDialog(self.get_toplevel(),
-                                   Gtk.DialogFlags.MODAL,
-                                   Gtk.MessageType.QUESTION,
-                                   Gtk.ButtonsType.YES_NO,
-                                   "Update %s to episode %d?" % (show['title'], played_ep))
-        dialog.show_all()
+        dialog = Gtk.MessageDialog(
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Update %s to episode %d?" % (show['title'], played_ep))
+
+        dialog.set_transient_for(self.get_root())
+        dialog.set_modal(True)
         dialog.connect(
             "response", self._on_response_update_next, show, played_ep)
+        dialog.set_visible(True)
 
     def _on_response_update_next(self, widget, response, show, played_ep):
         widget.destroy()
@@ -586,8 +588,6 @@ class NotebookPage(Gtk.ScrolledWindow):
 
     def _init_widgets(self, page_num, status, config):
         self.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self.set_size_request(550, 300)
-        self.set_border_width(5)
 
         self._show_tree_view = ShowTreeView(
             config['colors'],
@@ -609,12 +609,14 @@ class NotebookPage(Gtk.ScrolledWindow):
             "changed", self._on_selection_changed)
         self._show_tree_view.connect("row-activated", self._on_row_activated)
         self._show_tree_view.connect("column-toggled", self._on_column_toggled)
-        self._show_tree_view.connect(
-            "button-press-event", self._on_show_context_menu)
+        gesture = Gtk.GestureClick()
+        gesture.set_button(Gdk.BUTTON_SECONDARY)
+        gesture.connect("pressed", self._on_show_context_menu)
+        self._show_tree_view.add_controller(gesture)
         self._show_tree_view.get_model().connect("row-inserted", self._update_title)
         self._show_tree_view.get_model().connect("row-deleted", self._update_title)
 
-        self.add(self._show_tree_view)
+        self.set_child(self._show_tree_view)
 
     def set_column_visible(self, column_name, visible):
         self._show_tree_view.cols[column_name].set_visible(visible)
@@ -668,78 +670,58 @@ class NotebookPage(Gtk.ScrolledWindow):
     def _on_column_toggled(self, tree_view, column_name, visible):
         self.emit('column-toggled', column_name, visible)
 
-    def _on_show_context_menu(self, tree_view, event):
-        x = int(event.x)
-        y = int(event.y)
-        pthinfo = tree_view.get_path_at_pos(x, y)
+    def _on_show_context_menu(self, gesture, n_press, x, y):
+        bin_x, bin_y = self._show_tree_view.convert_widget_to_bin_window_coords(x, y)
+        path_result = self._show_tree_view.get_path_at_pos(bin_x, bin_y)
 
-        if (event.type == Gdk.EventType.BUTTON_PRESS and
-                event.button == Gdk.BUTTON_SECONDARY and pthinfo):
-            path, col, cellx, celly = pthinfo
-            tree_view.grab_focus()
-            tree_view.set_cursor(path, col, 0)
-            self._view_context_menu(event)
+        if path_result:
+            path, col, cell_x, cell_y = path_result
+            self._show_tree_view.grab_focus()
+            self._show_tree_view.set_cursor(path, col, 0)
+            self._view_context_menu(x, y)
             return True
 
         return False
 
-    def _view_context_menu(self, event):
+    def _view_context_menu(self, x, y):
         show = self._engine.get_show_info(self._selected_show)
 
-        menu = Gtk.Menu()
-        mb_play = Gtk.ImageMenuItem('Play Next',
-                                    Gtk.Image.new_from_icon_name(
-                                        "media-playback-start", Gtk.IconSize.MENU))
-        mb_play.connect("activate",
-                        self._on_mb_activate,
-                        ShowEventType.PLAY_NEXT)
-        mb_info = Gtk.MenuItem("Show details...")
-        mb_info.connect("activate",
-                        self._on_mb_activate,
-                        ShowEventType.DETAILS)
-        mb_web = Gtk.MenuItem("Open web site")
-        mb_web.connect("activate",
-                       self._on_mb_activate,
-                       ShowEventType.OPEN_WEBSITE)
-        mb_folder = Gtk.MenuItem("Open containing folder")
-        mb_folder.connect("activate",
-                          self._on_mb_activate,
-                          ShowEventType.OPEN_FOLDER)
-        mb_copy = Gtk.MenuItem("Copy title to clipboard")
-        mb_copy.connect("activate",
-                        self._on_mb_activate,
-                        ShowEventType.COPY_TITLE)
-        mb_alt_title = Gtk.MenuItem("Set alternate title...")
-        mb_alt_title.connect("activate",
-                             self._on_mb_activate,
-                             ShowEventType.CHANGE_ALTERNATIVE_TITLE)
-        mb_delete = Gtk.ImageMenuItem('Delete',
-                                      Gtk.Image.new_from_icon_name(
-                                          "edit-delete", Gtk.IconSize.MENU))
-        mb_delete.connect("activate",
-                          self._on_mb_activate,
-                          ShowEventType.REMOVE)
+        menu_model = Gio.Menu()
 
-        menu.append(mb_play)
+        main_model = Gio.Menu()
+        main_model.append('Play next', 'show.play_next')
+        main_model.append_submenu('Play episode', self._build_episode_menu(show))
+        main_model.append('Show details...', 'show.details')
+        main_model.append('Open web site', 'show.open_website')
+        main_model.append('Open containing folder', 'show.open_folder')
+        menu_model.append_section(None, main_model)
+
+        title_model = Gio.Menu()
+        title_model.append('Copy title to clipboard', 'show.copy_title')
+        title_model.append('Set alternate title...', 'show.change_alternative_title')
+        menu_model.append_section(None, title_model)
+
+        destruction_model = Gio.Menu()
+        destruction_model.append('Delete', 'show.delete')
+        menu_model.append_section(None, destruction_model)
+
+        position = Gdk.Rectangle()
+        position.x = x
+        position.y = y
+
+        popover_menu = Gtk.PopoverMenu.new_from_model(menu_model)
+        popover_menu.set_parent(self)
+        popover_menu.set_has_arrow(False)
+        popover_menu.set_halign(Gtk.Align.START)
+        popover_menu.set_pointing_to(position)
+        popover_menu.popup()
+
+        return
 
         menu_eps = self._build_episode_menu(show)
-
         mb_playep = Gtk.MenuItem("Play episode")
         mb_playep.set_submenu(menu_eps)
         mb_playep.set_sensitive(bool(menu_eps.get_children()))
-        menu.append(mb_playep)
-
-        menu.append(mb_info)
-        menu.append(mb_web)
-        menu.append(mb_folder)
-        menu.append(Gtk.SeparatorMenuItem())
-        menu.append(mb_copy)
-        menu.append(mb_alt_title)
-        menu.append(Gtk.SeparatorMenuItem())
-        menu.append(mb_delete)
-
-        menu.show_all()
-        menu.popup_at_pointer(event)
 
     def _build_episode_menu(self, show):
         library_episodes = set(self._engine.library().get(show['id'], ()))
@@ -750,24 +732,18 @@ class NotebookPage(Gtk.ScrolledWindow):
         )
         next_ep = show['my_progress'] + 1
 
-        menu_eps = Gtk.Menu()
+        menu_eps = Gio.Menu()
         for i in range(1, total + 1):
-            mb_playep = Gtk.CheckMenuItem(str(i))
+            title = str(i)
+
             if i == next_ep:
-                mb_playep.set_label(str(i) + " - Next")
-                menu_eps.set_focus_child(mb_playep)
+                title += " - Next"
+
             if i >= next_ep:
-                mb_playep.set_margin_left(10)
-            mb_playep.set_active(i in library_episodes)
-            mb_playep.set_draw_as_radio(True)
-            mb_playep.connect("activate",
-                              self._on_mb_activate,
-                              ShowEventType.PLAY_EPISODE, i)
-            menu_eps.append(mb_playep)
+                title = "  " + title
+
+            mb_playep = Gio.MenuItem.new(title, 'show.play_episode')
+            mb_playep.set_attribute_value("target", GLib.Variant.new_string(str(i)))
+            menu_eps.append_item(mb_playep)
 
         return menu_eps
-
-    def _on_mb_activate(self, menu_item, event_type, data=None):
-        data = (self._selected_show,) if data is None else (
-            self._selected_show, data)
-        self.emit('show-action', event_type, data)
