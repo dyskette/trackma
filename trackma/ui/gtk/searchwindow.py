@@ -26,7 +26,7 @@ from trackma.ui.gtk.showinfobox import ShowInfoBox
 
 class SearchThread(threading.Thread):
     def __init__(self, engine, search_text, callback):
-        threading.Thread.__init__(self)
+        super().__init__()
         self._entries = []
         self._error = None
         self._engine = engine
@@ -53,8 +53,7 @@ class SearchWindow(Gtk.Window):
     __gtype_name__ = 'SearchWindow'
 
     __gsignals__ = {
-        'search-error': (GObject.SignalFlags.RUN_FIRST, None,
-                         (str,))
+        'search-error': (GObject.SignalFlags.RUN_FIRST, None, (str,))
     }
 
     btn_add_show = Gtk.Template.Child()
@@ -62,11 +61,10 @@ class SearchWindow(Gtk.Window):
     shows_viewport = Gtk.Template.Child()
     show_info_container = Gtk.Template.Child()
     progress_spinner = Gtk.Template.Child()
-    headerbar = Gtk.Template.Child()
+    headerbar_subtitle = Gtk.Template.Child()
 
     def __init__(self, engine, colors, current_status, transient_for=None):
-        Gtk.Window.__init__(self, transient_for=transient_for)
-        self.init_template()
+        super().__init__(transient_for=transient_for)
         self._entries = []
         self._selected_show = None
         self._showdict = None
@@ -77,17 +75,12 @@ class SearchWindow(Gtk.Window):
 
         self.showlist = SearchTreeView(colors)
         self.showlist.get_selection().connect("changed", self._on_selection_changed)
-        self.showlist.set_size_request(250, 350)
-        self.showlist.show()
 
         self.info = ShowInfoBox(engine, orientation=Gtk.Orientation.VERTICAL)
-        self.info.set_size_request(200, 350)
-        self.info.show()
+        self.info.set_hexpand(True)
 
-        self.shows_viewport.add(self.showlist)
-        self.show_info_container.pack_start(self.info, True, True, 0)
-        self.search_paned.set_position(400)
-        self.set_size_request(450, 350)
+        self.shows_viewport.set_child(self.showlist)
+        self.show_info_container.append(self.info)
 
     @Gtk.Template.Callback()
     def _on_search_entry_search_changed(self, search_entry):
@@ -105,14 +98,15 @@ class SearchWindow(Gtk.Window):
         if self._search_thread:
             self._search_thread.stop()
 
-        self.headerbar.set_subtitle("Searching: \"%s\"" % text)
+        self.headerbar_subtitle.set_label("Searching: \"%s\"" % text)
+        self.headerbar_subtitle.set_visible(True)
         self._search_thread = SearchThread(self._engine,
                                            text,
                                            self._search_finish_idle)
         self._search_thread.start()
 
     def _search_finish(self):
-        self.headerbar.set_subtitle(
+        self.headerbar_subtitle.set_label(
             "%s result%s." % ((len(self._entries), 's')
                               if len(self._entries) > 0
                               else ('No', '')
@@ -204,7 +198,6 @@ class SearchTreeView(Gtk.TreeView):
         self.colors = colors
 
     def append_start(self):
-        self.freeze_child_notify()
         self.store.clear()
 
     def append(self, show):
@@ -224,5 +217,4 @@ class SearchTreeView(Gtk.TreeView):
         self.store.append(row)
 
     def append_finish(self):
-        self.thaw_child_notify()
         self.store.set_sort_column_id(1, Gtk.SortType.ASCENDING)
