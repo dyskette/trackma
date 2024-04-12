@@ -34,9 +34,10 @@
                     <property name="halign">center</property>
                     <property name="spacing">9</property>
                     <child>
-                      <object class="GtkBox" id="image_container">
-                        <property name="halign">center</property>
-                        <property name="orientation">vertical</property>
+                      <object class="ImageBox" id="image_box">
+                        <property name="valign">start</property>
+                        <property name="width-request">225</property>
+                        <property name="height-request">300</property>
                       </object>
                     </child>
                   </object>

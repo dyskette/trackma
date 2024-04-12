@@ -85,7 +85,15 @@
         <property name="spacing">12</property>
         <child>
           <object class="GtkBox" id="image_container_box">
+            <property name="width-request">120</property>
+            <property name="height-request">160</property>
             <property name="orientation">vertical</property>
+            <child>
+              <object class="ImageBox" id="image_box">
+                <property name="width-request">100</property>
+                <property name="height-request">140</property>
+              </object>
+            </child>
           </object>
         </child>
         <child>

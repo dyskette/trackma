@@ -31,7 +31,7 @@ class ShowInfoBox(Gtk.Box):
 
     label_title = Gtk.Template.Child()
     data_container = Gtk.Template.Child()
-    image_container = Gtk.Template.Child()
+    image_box: ImageBox = Gtk.Template.Child()
 
     def __init__(self, engine, orientation=Gtk.Orientation.HORIZONTAL):
         super().__init__()
@@ -41,10 +41,6 @@ class ShowInfoBox(Gtk.Box):
         self.image_thread = None
         self.details = None
         self.details_e = None
-
-        self.image_box = ImageBox(225, 300)
-        self.image_box.show()
-        self.image_container.append(self.image_box)
 
         self.data_label = Gtk.Label.new('')
         self.data_label.set_wrap(True)

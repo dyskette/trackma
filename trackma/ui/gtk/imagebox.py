@@ -16,32 +16,64 @@
 
 import os
 import threading
-import urllib.request
-from io import BytesIO
-
-from gi.repository import GLib, GdkPixbuf, Gtk
-
+import requests
+from collections.abc import Callable
+from gi.repository import GLib, Gtk, Gdk
 from trackma import utils
+from trackma.ui.gtk import gtk_dir
 
-try:
-    from PIL import Image
-    imaging_available = True
-except ImportError:
-    imaging_available = False
+
+@Gtk.Template.from_file(os.path.join(gtk_dir, 'data/imagebox.ui'))
+class ImageBox(Gtk.Box):
+    __gtype_name__ = 'ImageBox'
+
+    label: Gtk.Label = Gtk.Template.Child()
+    image: Gtk.Picture = Gtk.Template.Child()
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        self._image_thread = None
+
+    def do_realize(self) -> None:
+        width, height = self.get_size_request()
+        self.label.set_size_request(width, height)
+        self.image.set_size_request(width, height)
+
+    def reset(self) -> None:
+        self.set_image(utils.DATADIR + '/icon.png')
+
+    def set_text(self, text: str) -> None:
+        self.label.set_text(text)
+        self.label.set_visible(True)
+        self.image.set_visible(False)
+
+    def set_image(self, filename: str) -> None:
+        texture = Gdk.Texture.new_from_filename(filename)
+        self.image.set_paintable(texture)
+        self.image.set_visible(True)
+        self.label.set_visible(False)
+
+    def set_image_remote(self, url: str, filename: str) -> None:
+        if self._image_thread:
+            self._image_thread.stop()
+
+        self.set_text("Loading...")
+        self._image_thread = ImageThread(url, filename, self.set_image)
+        self._image_thread.start()
 
 
 class ImageThread(threading.Thread):
-    def __init__(self, url, filename, width, height, callback):
+    def __init__(self, url: str, filename: str, callback: Callable[[str], None]) -> None:
         super().__init__()
         self._url = url
+        self._headers = {"user-agent": "TrackmaImage/{}".format(utils.VERSION)}
         self._filename = filename
-        self._width = width
-        self._height = height
         self._callback = callback
         self._stop_request = threading.Event()
 
-    def run(self):
-        self._save_image(self._download_file())
+    def run(self) -> None:
+        self._download_file()
 
         if self._stop_request.is_set():
             return
@@ -49,89 +81,12 @@ class ImageThread(threading.Thread):
         if os.path.exists(self._filename):
             GLib.idle_add(self._callback, self._filename)
 
-    def _download_file(self):
-        request = urllib.request.Request(self._url)
-        request.add_header(
-            "User-Agent", "TrackmaImage/{}".format(utils.VERSION))
-        return BytesIO(urllib.request.urlopen(request).read())
+    def _download_file(self) -> None:
+        r = requests.get(self._url, self._headers)
 
-    def _save_image(self, img_bytes):
-        if imaging_available:
-            image = Image.open(img_bytes)
-            image.thumbnail((self._width, self._height), Image.BICUBIC)
-            image.convert("RGB").save(self._filename)
-        else:
-            with open(self._filename, 'wb') as img_file:
-                img_file.write(img_bytes.read())
+        with open(self._filename, 'wb') as fd:
+            for chunk in r.iter_content(chunk_size=128):
+                fd.write(chunk)
 
-    def stop(self):
+    def stop(self) -> None:
         self._stop_request.set()
-
-
-class ImageBox(Gtk.Box):
-    def __init__(self, width, height):
-        super().__init__()
-
-        self._width = width
-        self._height = height
-
-        self._image = Gtk.Image()
-        self._image.set_size_request(width, height)
-
-        self._label_holder = Gtk.Label()
-        self._label_holder.set_size_request(width, height)
-
-        self._image_thread = None
-
-        if imaging_available:
-            self.prepend(self._label_holder)
-            self.prepend(self._image)
-        else:
-            self.prepend(self._label_holder)
-
-        self.reset()
-
-    def reset(self):
-        if imaging_available:
-            self.set_image(utils.DATADIR + '/icon.png')
-        else:
-            self.set_text("PIL library\nnot available")
-
-    def set_text(self, text):
-        self._label_holder.set_text(text)
-        self._label_holder.show()
-        self._image.hide()
-
-    def set_image(self, filename):
-        if not imaging_available:
-            return
-
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
-        width, height = scale(pixbuf.get_width(),
-                              pixbuf.get_height(), self._width, self._height)
-        scaled_buf = pixbuf.scale_simple(
-            width, height, GdkPixbuf.InterpType.BILINEAR)
-
-        self._image.set_from_pixbuf(scaled_buf)
-        self._image.show()
-        self._label_holder.hide()
-
-    def set_image_remote(self, url, filename):
-        if not imaging_available:
-            return
-
-        if self._image_thread:
-            self._image_thread.stop()
-
-        self.set_text("Loading...")
-        self._image_thread = ImageThread(
-            url, filename, self._width, self._height, self.set_image)
-        self._image_thread.start()
-
-
-def scale(w, h, x, y, maximum=True):
-    nw = y * w / h
-    nh = x * h / w
-    if maximum ^ (nw >= x):
-        return nw or 1, y
-    return x, nh or 1

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <template class="ImageBox" parent="GtkBox">
+    <child>
+      <object class="GtkLabel" id="label">
+      </object>
+    </child>
+    <child>
+      <object class="GtkPicture" id="image">
+        <property name="content-fit">scale-down</property>
+      </object>
+    </child>
+  </template>
+</interface>

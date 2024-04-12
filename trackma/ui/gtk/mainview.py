@@ -62,6 +62,7 @@ class MainView(Gtk.Box):
     statusbox = Gtk.Template.Child()
     statusmodel = Gtk.Template.Child()
     notebook = Gtk.Template.Child()
+    image_box: ImageBox = Gtk.Template.Child()
 
     def __init__(self, config, debug=False):
         super().__init__()
@@ -98,10 +99,6 @@ class MainView(Gtk.Box):
         self._engine_reload(account, mediatype, extern_widget)
 
     def _init_widgets(self):
-        self.image_box = ImageBox(100, 150)
-        self.image_container_box.prepend(self.image_box)
-
-        self.notebook.set_scrollable(True)
         # TODO: Make tabs scrollable
         # self.notebook.add_events(Gdk.EventMask.SCROLL_MASK |
         #                          Gdk.EventMask.SMOOTH_SCROLL_MASK)
