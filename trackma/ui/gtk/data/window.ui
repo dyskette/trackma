@@ -1,52 +1,57 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.22.1 -->
 <interface>
-  <requires lib="gtk+" version="3.20"/>
+  <requires lib="gtk+" version="4.0"/>
   <template class="TrackmaWindow" parent="GtkApplicationWindow">
-    <property name="can_focus">False</property>
     <property name="default_width">600</property>
     <property name="default_height">600</property>
     <child type="titlebar">
       <object class="GtkHeaderBar" id="header_bar">
-        <property name="visible">True</property>
-        <property name="can_focus">False</property>
-        <property name="show_close_button">True</property>
-        <child>
-          <object class="GtkMenuButton" id="btn_appmenu">
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="popover">popover_appmenu</property>
+        <property name="title-widget">
+          <object class="GtkBox" id="title_box">
+            <property name="valign">center</property>
+            <property name="orientation">vertical</property>
+            <!--Title of the headerbar-->
             <child>
-              <object class="GtkImage">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <property name="icon_name">open-menu-symbolic</property>
+              <object class="GtkLabel" id="title_label">
+                <property name="label" translatable="yes">Trackma</property>
+                <property name="single-line-mode">true</property>
+                <property name="ellipsize">end</property>
+                <property name="width-chars">5</property>
+                <style>
+                  <class name="title"/>
+                </style>
+              </object>
+            </child>
+            <!--Subtitle of the headerbar-->
+            <child>
+              <object class="GtkLabel" id="subtitle_label">
+                <property name="label" translatable="yes"></property>
+                <property name="single-line-mode">true</property>
+                <property name="ellipsize">end</property>
+                <property name="width-chars">5</property>
+                <style>
+                  <class name="subtitle"/>
+                </style>
               </object>
             </child>
           </object>
-          <packing>
-            <property name="pack_type">end</property>
-          </packing>
+        </property>
+        <child type="end">
+          <object class="GtkMenuButton">
+            <property name="icon-name">open-menu-symbolic</property>
+            <property name="menu-model">main-menu</property>
+          </object>
         </child>
-        <child>
+        <child type="end">
           <object class="GtkMenuButton" id="btn_mediatype">
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
             <property name="popover">popover_mediatype</property>
             <child>
               <object class="GtkImage">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
                 <property name="icon_name">content-loading-symbolic</property>
               </object>
             </child>
           </object>
-          <packing>
-            <property name="pack_type">end</property>
-            <property name="position">1</property>
-          </packing>
         </child>
       </object>
     </child>
@@ -55,17 +60,63 @@
     </child>
   </template>
   <object class="GtkPopover" id="popover_appmenu">
-    <property name="can_focus">False</property>
-    <property name="relative_to">btn_appmenu</property>
     <child>
       <placeholder/>
     </child>
   </object>
   <object class="GtkPopover" id="popover_mediatype">
-    <property name="can_focus">False</property>
-    <property name="relative_to">btn_mediatype</property>
     <child>
       <placeholder/>
     </child>
   </object>
+  <menu id="main-menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Search</attribute>
+        <attribute name="action">win.search</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Accounts</attribute>
+        <attribute name="action">win.accounts</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Synchronize</attribute>
+        <attribute name="action">win.synchronize</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Upload</attribute>
+        <attribute name="action">win.upload</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Download</attribute>
+        <attribute name="action">win.download</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Scan files</attribute>
+        <attribute name="action">win.scanfiles</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Preferences</attribute>
+        <attribute name="action">win.preferences</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Keyboard Shortcuts</attribute>
+        <attribute name="action">win.show-help-overlay</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">About Trackma</attribute>
+        <attribute name="action">win.about</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Quit</attribute>
+        <attribute name="action">app.quit</attribute>
+      </item>
+    </section>
+  </menu>
 </interface>

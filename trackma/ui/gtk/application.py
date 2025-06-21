@@ -15,8 +15,8 @@
 #
 from gi import require_version
 
-require_version('Gtk', '3.0')
-require_version('Gdk', '3.0')
+require_version('Gtk', '4.0')
+require_version('Gdk', '4.0')
 
 from trackma import utils  # noqa: E402
 from trackma.ui.gtk.window import TrackmaWindow  # noqa: E402
@@ -67,21 +67,21 @@ class TrackmaApplication(Gtk.Application):
             self.set_accels_for_action(name, accel)
 
         accels = (
-            ('win.search', '<Primary>A'),
-            ('win.synchronize', '<Primary>S'),
-            ('win.upload', '<Primary>E'),
-            ('win.download', '<Primary>D'),
-            ('win.scanfiles', '<Primary>L'),
-            ('win.show-help-overlay', '<Primary>question'),
-            ('app.quit', '<Primary>Q'),
+            ('win.search', '<Primary>a'),
+            ('win.synchronize', '<Primary>s'),
+            ('win.upload', '<Primary>e'),
+            ('win.download', '<Primary>d'),
+            ('win.scanfiles', '<Primary>l'),
+            ('win.show-help-overlay', 'F1'),
+            ('app.quit', '<Primary>q'),
 
             # Shows
-            ('win.play_next', '<Primary>N'),
-            ('win.play_random', '<Primary>R'),
+            ('win.play_next', '<Primary>n'),
+            ('win.play_random', '<Primary>r'),
             ('win.episode_add', '<Primary>Right'),
             ('win.episode_remove', '<Primary>Left'),
             ('win.delete', ('Delete', 'KP_Delete')),
-            ('win.copy', '<Primary>C')
+            ('win.copy', '<Primary>c')
         )
 
         for (name, accel) in accels:
@@ -103,8 +103,8 @@ class TrackmaApplication(Gtk.Application):
             Gtk.ButtonsType.CLOSE,
             str(error)
         )
-        md.run()
-        md.destroy()
+        md.connect('response', lambda d, r: d.destroy())
+        md.present()
 
     def _on_quit(self, action, param):
         self.window._quit()

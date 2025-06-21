@@ -23,30 +23,25 @@ from trackma.ui.gtk.showinfobox import ShowInfoBox
 
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/showinfowindow.ui'))
-class ShowInfoWindow(Gtk.Dialog):
+class ShowInfoWindow(Gtk.Window):
     __gtype_name__ = 'ShowInfoWindow'
 
-    info_container = Gtk.Template.Child()
+    info_container: Gtk.Box = Gtk.Template.Child()
 
     def __init__(self, engine, show_data, transient_for=None):
-        Gtk.Dialog.__init__(self, use_header_bar=True,
-                            transient_for=transient_for)
+        Gtk.Window.__init__(self, transient_for=transient_for)
         self.init_template()
+        self.set_title("Details")
 
         self._engine = engine
         self._show = show_data
 
         info_box = ShowInfoBox(engine)
         info_box.load(show_data)
-        info_box.show()
 
-        self.info_container.pack_start(info_box, True, True, 0)
-
-    @Gtk.Template.Callback()
-    def _on_dialog_close(self, widget):
-        self.destroy()
+        self.info_container.append(info_box)
 
     @Gtk.Template.Callback()
-    def _on_btn_website_clicked(self, btn):
+    def _on_btn_website_clicked(self, btn: Gtk.Button):
         if self._show['url']:
             Gtk.show_uri(None, self._show['url'], Gdk.CURRENT_TIME)

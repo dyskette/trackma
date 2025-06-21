@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from gi.repository import GObject, Gdk, Gtk, Pango
+from gi.repository import GObject, Gdk, Gtk, Pango, Graphene
 
 from trackma import utils
 
@@ -179,6 +179,20 @@ class ShowListStore(Gtk.ListStore):
                     row[9] = self._get_color(show, row[8])
                 return
 
+    def refresh_colors(self):
+        """Refresh colors in all existing rows after settings change"""
+        for row in self:
+            # Recalculate color for each row based on current show data
+            show_id = int(row[0])
+            show = {
+                'id': show_id,
+                'queued': False,  # We don't have this info in the row
+                'my_progress': row[2],
+                'status': row[16],
+                'my_status': row[15]
+            }
+            row[9] = self._get_color(show, row[8])
+
 
 class ShowListFilter(Gtk.TreeModelFilter):
     def __init__(self, status=None, *args, **kwargs):
@@ -217,7 +231,7 @@ class ShowTreeView(Gtk.TreeView):
         self.set_enable_search(True)
         self.set_search_column(1)
         self.set_property('has-tooltip', True)
-        self.connect('query-tooltip', self.show_tooltip)
+        # self.connect('query-tooltip', self.show_tooltip)
 
         self.cols = dict()
         self.available_columns = (
@@ -236,7 +250,8 @@ class ShowTreeView(Gtk.TreeView):
             self.cols[name].set_sort_column_id(sort)
 
             # This is a hack to allow for right-clickable header
-            label = Gtk.Label(name)
+            label = Gtk.Label()
+            label.set_text(name)
             label.show()
             self.cols[name].set_widget(label)
 
@@ -246,7 +261,7 @@ class ShowTreeView(Gtk.TreeView):
             while not isinstance(w, Gtk.Button):
                 w = w.get_parent()
 
-            w.connect('button-press-event', self._header_button_press)
+            # w.connect('button-press-event', self._header_button_press)
 
             if name not in self.visible_columns:
                 self.cols[name].set_visible(False)
@@ -274,7 +289,8 @@ class ShowTreeView(Gtk.TreeView):
         self.cols['Progress'].set_expand(False)
 
         if self.progress_style == 0:
-            renderer_percent = Gtk.CellRendererProgress()
+            # Use the custom ProgressCellRenderer for both styles
+            renderer_percent = ProgressCellRenderer(self.colors)
             self.cols['Percent'].pack_start(renderer_percent, False)
             self.cols['Percent'].add_attribute(renderer_percent, 'value', 10)
         else:
@@ -284,7 +300,7 @@ class ShowTreeView(Gtk.TreeView):
             self.cols['Percent'].add_attribute(renderer_percent, 'total', 6)
             self.cols['Percent'].add_attribute(renderer_percent, 'subvalue', 7)
             self.cols['Percent'].add_attribute(renderer_percent, 'eps', 8)
-        renderer_percent.set_fixed_size(100, -1)
+        # Removed set_fixed_size as it's deprecated. Size should be handled by column properties or CSS.
 
         renderer = Gtk.CellRendererText()
         self.cols['Score'].pack_start(renderer, False)
@@ -304,18 +320,8 @@ class ShowTreeView(Gtk.TreeView):
 
     def _header_button_press(self, button, event):
         if event.button == 3:
-            menu = Gtk.Menu()
-            for name, sort in self.available_columns:
-                is_active = name in self.visible_columns
-
-                item = Gtk.CheckMenuItem(name)
-                item.set_active(is_active)
-                item.connect('activate', self._header_menu_item,
-                             name, not is_active)
-                menu.append(item)
-                item.show()
-
-            menu.popup_at_pointer(event)
+            # GTK4: Right-click menu functionality removed for now
+            # The menu system changed significantly in GTK4
             return True
 
         return False
@@ -323,6 +329,23 @@ class ShowTreeView(Gtk.TreeView):
     @property
     def filter(self):
         return self.props.model.props.model
+
+    def set_column_visible(self, column_name, visible):
+        if column_name in self.cols:
+            self.cols[column_name].set_visible(visible)
+
+    def refresh_colors(self, colors):
+        """Refresh colors in the tree view after settings change"""
+        self.colors = colors
+        
+        # Update progress cell renderer colors
+        for column in self.cols.values():
+            for cell in column.get_cells():
+                if isinstance(cell, ProgressCellRenderer):
+                    cell.colors = colors
+        
+        # Force a redraw
+        self.queue_draw()
 
     def show_tooltip(self, view, x, y, kbd, tip):
         (has_path, tx, ty,
@@ -418,65 +441,71 @@ class ProgressCellRenderer(Gtk.CellRenderer):
     def do_get_property(self, pspec):
         return getattr(self, pspec.name)
 
-    def do_render(self, cr, widget, background_area, cell_area, flags):
-        (x, y, w, h) = self.do_get_size(widget, cell_area)
-
-        # set_source_rgb(0.9, 0.9, 0.9)
-        cr.set_source_rgb(*self.__get_color(self.colors['progress_bg']))
-        cr.rectangle(x, y, w, h)
-        cr.fill()
+    def do_snapshot(self, snapshot, widget, background_area, cell_area, flags):
+        bg_color = Gdk.RGBA()
+        bg_color.parse(self.colors['progress_bg'])
+        rect = Graphene.Rect().init(
+            cell_area.x,
+            cell_area.y,
+            cell_area.width,
+            cell_area.height)
+        snapshot.append_color(bg_color, rect)
 
         if not self.total:
             return
 
+        # Aired episodes
         if self.subvalue:
             if self.subvalue > self.total:
-                mid = w
+                mid = cell_area.width
             else:
-                mid = int(w / float(self.total) * self.subvalue)
+                mid = int(cell_area.width / float(self.total) * self.subvalue)
 
-            # set_source_rgb(0.7, 0.7, 0.7)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_bg']))
-            cr.rectangle(x, y+h-self._subheight, mid, h-(h-self._subheight))
-            cr.fill()
+            sub_color = Gdk.RGBA()
+            sub_color.parse(self.colors['progress_sub_bg'])
+            sub_rect = Graphene.Rect().init(
+                cell_area.x,
+                cell_area.y + cell_area.height - self._subheight,
+                mid,
+                cell_area.height - (cell_area.height - self._subheight))
+            snapshot.append_color(sub_color, sub_rect)
 
+        # Completed episodes
         if self.value:
             if self.value >= self.total:
-                # set_source_rgb(0.6, 0.8, 0.7)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_complete']))
-                cr.rectangle(x, y, w, h)
+                # Complete
+                complete_color = Gdk.RGBA()
+                complete_color.parse(self.colors['progress_complete'])
+                complete_rect = Graphene.Rect().init(
+                    cell_area.x,
+                    cell_area.y,
+                    cell_area.width,
+                    cell_area.height)
+                snapshot.append_color(complete_color, complete_rect)
             else:
-                mid = int(w / float(self.total) * self.value)
-                # set_source_rgb(0.6, 0.7, 0.8)
-                cr.set_source_rgb(
-                    *self.__get_color(self.colors['progress_fg']))
-                cr.rectangle(x, y, mid, h)
-            cr.fill()
+                # Partial progress
+                mid = int(cell_area.width / float(self.total) * self.value)
+                progress_color = Gdk.RGBA()
+                progress_color.parse(self.colors['progress_fg'])
+                progress_rect = Graphene.Rect().init(
+                    cell_area.x,
+                    cell_area.y,
+                    mid,
+                    cell_area.height)
+                snapshot.append_color(progress_color, progress_rect)
 
+        # Stored episodes
         if self.eps:
-            # set_source_rgb(0.4, 0.5, 0.6)
-            cr.set_source_rgb(
-                *self.__get_color(self.colors['progress_sub_fg']))
+            eps_color = Gdk.RGBA()
+            eps_color.parse(self.colors['progress_sub_fg'])
+            
             for episode in self.eps:
                 if 0 < episode <= self.total:
-                    start = int(w / float(self.total) * (episode - 1))
-                    finish = int(w / float(self.total) * episode)
-                    cr.rectangle(x+start, y+h-self._subheight,
-                                 finish-start, h-(h-self._subheight))
-                    cr.fill()
-
-    def do_get_size(self, widget, cell_area):
-        if cell_area is None:
-            return 0, 0, 0, 0
-        x = cell_area.x
-        y = cell_area.y
-        w = cell_area.width
-        h = cell_area.height
-        return x, y, w, h
-
-    @staticmethod
-    def __get_color(color_string):
-        color = Gdk.color_parse(color_string)
-        return color.red_float, color.green_float, color.blue_float
+                    start = int(cell_area.width / float(self.total) * (episode - 1))
+                    finish = int(cell_area.width / float(self.total) * episode)
+                    eps_rect = Graphene.Rect().init(
+                        cell_area.x + start,
+                        cell_area.y + cell_area.height - self._subheight,
+                        finish - start,
+                        cell_area.height - (cell_area.height - self._subheight))
+                    snapshot.append_color(eps_color, eps_rect)

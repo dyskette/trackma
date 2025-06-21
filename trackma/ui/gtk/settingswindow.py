@@ -16,18 +16,17 @@
 
 import os
 
-from gi.repository import Gdk, Gtk, Pango
+from gi.repository import Gdk, Gtk, Pango, GObject
 
 from trackma import utils
 from trackma.ui.gtk import gtk_dir
-from trackma.ui.gtk.statusicon import TrackmaStatusIcon
 
 
 def reprColor(gdkColor):
     return '#%02x%02x%02x' % (
-        round(gdkColor.red_float * 255),
-        round(gdkColor.green_float * 255),
-        round(gdkColor.blue_float * 255))
+        round(gdkColor.red * 255),
+        round(gdkColor.green * 255),
+        round(gdkColor.blue * 255))
 
 
 def getColor(colorString):
@@ -35,9 +34,13 @@ def getColor(colorString):
     # TODO: Take a group, role format (using GTK int values)
     # Returns gdk color
     if colorString[0] == "#":
-        return Gdk.color_parse(colorString)
+        rgba = Gdk.RGBA()
+        rgba.parse(colorString)
+        return rgba
 
-    return Gdk.color_parse("#000000")
+    rgba = Gdk.RGBA()
+    rgba.parse("#000000")
+    return rgba
 
 
 @Gtk.Template.from_file(os.path.join(gtk_dir, 'data/settingswindow.ui'))
@@ -45,37 +48,49 @@ class SettingsWindow(Gtk.Window):
 
     __gtype_name__ = 'SettingsWindow'
 
-    btn_save = Gtk.Template.Child()
-    switch_tracker = Gtk.Template.Child()
+    __gsignals__ = {
+        'settings-saved': (GObject.SignalFlags.RUN_FIRST, None, ())
+    }
+
+    btn_save: Gtk.Button = Gtk.Template.Child()
+    switch_tracker: Gtk.Switch = Gtk.Template.Child()
 
     radio_tracker_local = Gtk.Template.Child()
     radio_tracker_mpris = Gtk.Template.Child()
-    entry_player_process = Gtk.Template.Child()
+    entry_player_process: Gtk.Entry = Gtk.Template.Child()
     btn_file_chooser_executable = Gtk.Template.Child()
-    listbox_directories = Gtk.Template.Child()
-    btn_add_directory = Gtk.Template.Child()
-    checkbox_library_startup = Gtk.Template.Child()
-    checkbox_library_entire_list = Gtk.Template.Child()
-    checkbox_library_full_path = Gtk.Template.Child()
+    label_file_chooser_executable: Gtk.Label = Gtk.Template.Child()
+    listbox_directories: Gtk.ListBox = Gtk.Template.Child()
+    btn_add_directory: Gtk.Button = Gtk.Template.Child()
+    checkbox_library_startup: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_library_entire_list: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_library_full_path: Gtk.CheckButton = Gtk.Template.Child()
 
     radio_tracker_plex = Gtk.Template.Child()
-    entry_plex_host = Gtk.Template.Child()
-    spin_plex_port = Gtk.Template.Child()
-    entry_plex_username = Gtk.Template.Child()
-    entry_plex_password = Gtk.Template.Child()
-    checkbox_plex_obey_wait = Gtk.Template.Child()
-    checkbox_plex_ssl = Gtk.Template.Child()
-    spin_tracker_update_wait = Gtk.Template.Child()
+    entry_plex_host: Gtk.Entry = Gtk.Template.Child()
+    spin_plex_port: Gtk.SpinButton = Gtk.Template.Child()
+    entry_plex_username: Gtk.Entry = Gtk.Template.Child()
+    entry_plex_password: Gtk.Entry = Gtk.Template.Child()
+    checkbox_plex_obey_wait: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_plex_ssl: Gtk.CheckButton = Gtk.Template.Child()
+    spin_tracker_update_wait: Gtk.SpinButton = Gtk.Template.Child()
 
     radio_tracker_jellyfin = Gtk.Template.Child()
-    entry_jellyfin_host = Gtk.Template.Child()
-    spin_jellyfin_port = Gtk.Template.Child()
-    entry_jellyfin_username = Gtk.Template.Child()
-    entry_jellyfin_apikey = Gtk.Template.Child()
+    entry_jellyfin_host: Gtk.Entry = Gtk.Template.Child()
+    spin_jellyfin_port: Gtk.SpinButton = Gtk.Template.Child()
+    entry_jellyfin_username: Gtk.Entry = Gtk.Template.Child()
+    entry_jellyfin_apikey: Gtk.Entry = Gtk.Template.Child()
 
-    checkbox_tracker_update_close = Gtk.Template.Child()
-    checkbox_tracker_update_prompt = Gtk.Template.Child()
-    checkbox_tracker_not_found_prompt = Gtk.Template.Child()
+    radio_tracker_kodi = Gtk.Template.Child()
+    entry_kodi_host: Gtk.Entry = Gtk.Template.Child()
+    spin_kodi_port: Gtk.SpinButton = Gtk.Template.Child()
+    entry_kodi_username: Gtk.Entry = Gtk.Template.Child()
+    entry_kodi_password: Gtk.Entry = Gtk.Template.Child()
+    checkbox_kodi_obey_wait: Gtk.CheckButton = Gtk.Template.Child()
+
+    checkbox_tracker_update_close: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_tracker_update_prompt: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_tracker_not_found_prompt: Gtk.CheckButton = Gtk.Template.Child()
 
     radiobutton_download_days = Gtk.Template.Child()
     radiobutton_download_always = Gtk.Template.Child()
@@ -85,34 +100,34 @@ class SettingsWindow(Gtk.Window):
     radiobutton_upload_size = Gtk.Template.Child()
     radiobutton_upload_always = Gtk.Template.Child()
     radiobutton_upload_off = Gtk.Template.Child()
-    checkbox_upload_exit = Gtk.Template.Child()
+    checkbox_upload_exit: Gtk.CheckButton = Gtk.Template.Child()
 
-    spinbutton_download_days = Gtk.Template.Child()
-    spinbutton_upload_minutes = Gtk.Template.Child()
-    spinbutton_upload_size = Gtk.Template.Child()
+    spinbutton_download_days: Gtk.SpinButton = Gtk.Template.Child()
+    spinbutton_upload_minutes: Gtk.SpinButton = Gtk.Template.Child()
+    spinbutton_upload_size: Gtk.SpinButton = Gtk.Template.Child()
 
-    checkbox_auto_status_change = Gtk.Template.Child()
-    checkbox_auto_status_change_if_scored = Gtk.Template.Child()
-    checkbox_auto_date_change = Gtk.Template.Child()
+    checkbox_auto_status_change: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_auto_status_change_if_scored: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_auto_date_change: Gtk.CheckButton = Gtk.Template.Child()
 
-    checkbox_show_tray = Gtk.Template.Child()
-    checkbox_close_to_tray = Gtk.Template.Child()
-    checkbox_start_in_tray = Gtk.Template.Child()
-    checkbox_tray_api_icon = Gtk.Template.Child()
-    checkbox_remember_geometry = Gtk.Template.Child()
-    checkbox_classic_progress = Gtk.Template.Child()
+    checkbox_show_tray: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_close_to_tray: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_start_in_tray: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_tray_api_icon: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_remember_geometry: Gtk.CheckButton = Gtk.Template.Child()
+    checkbox_classic_progress: Gtk.CheckButton = Gtk.Template.Child()
 
-    colorbutton_rows_playing = Gtk.Template.Child()
-    colorbutton_rows_queued = Gtk.Template.Child()
-    colorbutton_rows_new_episode = Gtk.Template.Child()
-    colorbutton_rows_is_airing = Gtk.Template.Child()
-    colorbutton_rows_not_aired = Gtk.Template.Child()
+    colorbutton_rows_playing: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_rows_queued: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_rows_new_episode: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_rows_is_airing: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_rows_not_aired: Gtk.ColorButton = Gtk.Template.Child()
 
-    colorbutton_progress_bg = Gtk.Template.Child()
-    colorbutton_progress_fg = Gtk.Template.Child()
-    colorbutton_progress_sub_bg = Gtk.Template.Child()
-    colorbutton_progress_sub_fg = Gtk.Template.Child()
-    colorbutton_progress_complete = Gtk.Template.Child()
+    colorbutton_progress_bg: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_progress_fg: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_progress_sub_bg: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_progress_sub_fg: Gtk.ColorButton = Gtk.Template.Child()
+    colorbutton_progress_complete: Gtk.ColorButton = Gtk.Template.Child()
 
     def __init__(self, engine, config, configfile, transient_for=None):
         Gtk.Window.__init__(self, transient_for=transient_for)
@@ -168,11 +183,19 @@ class SettingsWindow(Gtk.Window):
             self.radio_tracker_plex.set_active(True)
         elif self.engine.get_config('tracker_type') == 'jellyfin':
             self.radio_tracker_jellyfin.set_active(True)
+        elif self.engine.get_config('tracker_type') == 'kodi':
+            self.radio_tracker_kodi.set_active(True)
 
         self.entry_player_process.set_text(
             self.engine.get_config('tracker_process'))
-        self.btn_file_chooser_executable.set_filename(
-            self.engine.get_config('player'))
+        
+        # Set initial filename for file chooser button
+        player_executable = self.engine.get_config('player')
+        if player_executable:
+            self.label_file_chooser_executable.set_label(player_executable)
+        else:
+            self.label_file_chooser_executable.set_label("Select player executable")
+            
         self.checkbox_library_startup.set_active(
             self.engine.get_config('library_autoscan'))
         self.checkbox_library_entire_list.set_active(
@@ -198,6 +221,12 @@ class SettingsWindow(Gtk.Window):
             self.engine.get_config('jellyfin_user'))
         self.entry_jellyfin_apikey.set_text(
             self.engine.get_config('jellyfin_api_key'))
+
+        self.entry_kodi_host.set_text(self.engine.get_config('kodi_host'))
+        self.spin_kodi_port.set_value(int(self.engine.get_config('kodi_port')))
+        self.entry_kodi_username.set_text(self.engine.get_config('kodi_user'))
+        self.entry_kodi_password.set_text(self.engine.get_config('kodi_passwd'))
+        self.checkbox_kodi_obey_wait.set_active(self.engine.get_config('kodi_obey_update_wait_s'))
 
         self.spin_tracker_update_wait.set_value(
             self.engine.get_config('tracker_update_wait_s'))
@@ -254,7 +283,7 @@ class SettingsWindow(Gtk.Window):
 
         for color_key, color_button in self._color_buttons.items():
             color = getColor(self.config['colors'][color_key])
-            color_button.set_color(color)
+            color_button.set_rgba(color)
 
         self._set_tracker_radio_buttons()
         self._button_toggled(self.radiobutton_download_days,
@@ -272,13 +301,13 @@ class SettingsWindow(Gtk.Window):
         self._button_toggled(self.checkbox_show_tray,
                              self.checkbox_tray_api_icon)
 
-        if not TrackmaStatusIcon.is_tray_available():
-            self.checkbox_show_tray.set_label(
-                'Show tray icon (Not supported in this environment)')
-            self.checkbox_show_tray.set_sensitive(False)
-            self.checkbox_close_to_tray.set_sensitive(False)
-            self.checkbox_start_in_tray.set_sensitive(False)
-            self.checkbox_tray_api_icon.set_sensitive(False)
+        # GTK4 doesn't support system tray icons, so disable tray-related options
+        self.checkbox_show_tray.set_label(
+            'Show tray icon (Not supported in GTK4)')
+        self.checkbox_show_tray.set_sensitive(False)
+        self.checkbox_close_to_tray.set_sensitive(False)
+        self.checkbox_start_in_tray.set_sensitive(False)
+        self.checkbox_tray_api_icon.set_sensitive(False)
 
     def _button_toggled(self, widget, spin):
         spin.set_sensitive(widget.get_active())
@@ -286,6 +315,7 @@ class SettingsWindow(Gtk.Window):
     @Gtk.Template.Callback()
     def _on_btn_save_clicked(self, btn):
         self.save_config()
+        self.emit('settings-saved')
         self.destroy()
 
     @Gtk.Template.Callback()
@@ -294,6 +324,7 @@ class SettingsWindow(Gtk.Window):
         self.radio_tracker_mpris.set_sensitive(state)
         self.radio_tracker_plex.set_sensitive(state)
         self.radio_tracker_jellyfin.set_sensitive(state)
+        self.radio_tracker_kodi.set_sensitive(state)
 
         if state:
             self._set_tracker_radio_buttons()
@@ -308,14 +339,27 @@ class SettingsWindow(Gtk.Window):
 
     @Gtk.Template.Callback()
     def _set_tracker_radio_buttons(self, radio_button=None):
+        # Check which radio button is active and enable/disable appropriate sections
         if self.radio_tracker_local.get_active() or self.radio_tracker_mpris.get_active():
             self._enable_local(True)
             self._enable_plex(False)
             self._enable_jellyfin(False)
-        else:
+            self._enable_kodi(False)
+        elif self.radio_tracker_plex.get_active():
             self._enable_local(False)
             self._enable_plex(True)
+            self._enable_jellyfin(False)
+            self._enable_kodi(False)
+        elif self.radio_tracker_jellyfin.get_active():
+            self._enable_local(False)
+            self._enable_plex(False)
             self._enable_jellyfin(True)
+            self._enable_kodi(False)
+        elif self.radio_tracker_kodi.get_active():
+            self._enable_local(False)
+            self._enable_plex(False)
+            self._enable_jellyfin(False)
+            self._enable_kodi(True)
 
     def _enable_local(self, enable):
         self.entry_player_process.set_sensitive(enable)
@@ -338,6 +382,13 @@ class SettingsWindow(Gtk.Window):
         self.entry_jellyfin_username.set_sensitive(enable)
         self.entry_jellyfin_apikey.set_sensitive(enable)
 
+    def _enable_kodi(self, enable):
+        self.entry_kodi_host.set_sensitive(enable)
+        self.spin_kodi_port.set_sensitive(enable)
+        self.entry_kodi_username.set_sensitive(enable)
+        self.entry_kodi_password.set_sensitive(enable)
+        self.checkbox_kodi_obey_wait.set_sensitive(enable)
+
     def _load_directories(self, paths):
         if isinstance(paths, str):
             paths = [paths]
@@ -347,27 +398,68 @@ class SettingsWindow(Gtk.Window):
 
     def _add_row_listbox_directory(self, path):
         row = DirectoryRow(path)
-        self.listbox_directories.add(row)
+        self.listbox_directories.append(row)
 
     @Gtk.Template.Callback()
     def _on_btn_add_directory_clicked(self, btn):
-        chooser_dialog = Gtk.FileChooserDialog('Select a directory',
-                                               self.get_parent_window(),
-                                               Gtk.FileChooserAction.OPEN,
-                                               ("_Cancel", Gtk.ResponseType.CANCEL,
-                                                "_Open", Gtk.ResponseType.OK))
-        chooser_dialog.set_default_response(Gtk.ResponseType.OK)
-        chooser_dialog.set_action(Gtk.FileChooserAction.SELECT_FOLDER)
+        chooser_dialog = Gtk.FileChooserDialog(
+            title='Select a directory',
+            transient_for=self,
+            action=Gtk.FileChooserAction.SELECT_FOLDER)
 
-        response = chooser_dialog.run()
-        if response == Gtk.ResponseType.OK:
-            self._add_row_listbox_directory(chooser_dialog.get_filename())
-        chooser_dialog.destroy()
+        # Add buttons manually for GTK4
+        chooser_dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
+        chooser_dialog.add_button("_Open", Gtk.ResponseType.OK)
+
+        def on_response(d, response):
+            if response == Gtk.ResponseType.OK:
+                file = d.get_file()
+                if file:
+                    self._add_row_listbox_directory(file.get_path())
+            d.destroy()
+
+        chooser_dialog.connect('response', on_response)
+        chooser_dialog.present()
+
+    @Gtk.Template.Callback()
+    def _on_btn_file_chooser_executable_clicked(self, btn):
+        """Handle file chooser button click for selecting player executable"""
+        chooser_dialog = Gtk.FileChooserDialog(
+            title='Select player executable',
+            transient_for=self,
+            action=Gtk.FileChooserAction.OPEN)
+
+        # Add buttons manually for GTK4
+        chooser_dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
+        chooser_dialog.add_button("_Open", Gtk.ResponseType.OK)
+
+        # Set file filters for executables
+        filter_executable = Gtk.FileFilter()
+        filter_executable.set_name("Executable files")
+        filter_executable.add_pattern("*.exe")  # Windows
+        filter_executable.add_pattern("*")      # Unix-like systems (no extension)
+        chooser_dialog.add_filter(filter_executable)
+
+        def on_response(dialog, response):
+            if response == Gtk.ResponseType.OK:
+                file = dialog.get_file()
+                if file:
+                    filename = file.get_path()
+                    if filename:
+                        # Update label with full path (will be ellipsized if too long)
+                        self.label_file_chooser_executable.set_label(filename)
+            dialog.destroy()
+
+        chooser_dialog.connect('response', on_response)
+        chooser_dialog.present()
 
     def save_config(self):
         """Engine Configuration"""
-        self.engine.set_config(
-            'player', self.btn_file_chooser_executable.get_filename() or '')
+        # Get the selected filename from the label
+        player_executable = self.label_file_chooser_executable.get_label()
+        if player_executable == "Select player executable":
+            player_executable = ""
+        self.engine.set_config('player', player_executable)
         self.engine.set_config(
             'tracker_process', self.entry_player_process.get_text())
         self.engine.set_config('library_autoscan',
@@ -395,6 +487,11 @@ class SettingsWindow(Gtk.Window):
             'jellyfin_user', self.entry_jellyfin_username.get_text())
         self.engine.set_config(
             'jellyfin_api_key', self.entry_jellyfin_apikey.get_text())
+        self.engine.set_config('kodi_host', self.entry_kodi_host.get_text())
+        self.engine.set_config('kodi_port', str(int(self.spin_kodi_port.get_value())))
+        self.engine.set_config('kodi_user', self.entry_kodi_username.get_text())
+        self.engine.set_config('kodi_passwd', self.entry_kodi_password.get_text())
+        self.engine.set_config('kodi_obey_update_wait_s', self.checkbox_kodi_obey_wait.get_active())
         self.engine.set_config(
             'tracker_enabled', self.switch_tracker.get_active())
         self.engine.set_config(
@@ -408,8 +505,14 @@ class SettingsWindow(Gtk.Window):
         self.engine.set_config('tracker_not_found_prompt',
                                self.checkbox_tracker_not_found_prompt.get_active())
 
-        self.engine.set_config(
-            'searchdir', [row.directory for row in self.listbox_directories.get_children()])
+        # Collect all directories from the listbox and save them to the engine configuration
+        directories = []
+        child = self.listbox_directories.get_first_child()
+        while child:
+            if hasattr(child, 'directory'):
+                directories.append(child.directory)
+            child = child.get_next_sibling()
+        self.engine.set_config('searchdir', directories)
 
         # Tracker type
         if self.radio_tracker_local.get_active():
@@ -420,6 +523,8 @@ class SettingsWindow(Gtk.Window):
             self.engine.set_config('tracker_type', 'plex')
         elif self.radio_tracker_jellyfin.get_active():
             self.engine.set_config('tracker_type', 'jellyfin')
+        elif self.radio_tracker_kodi.get_active():
+            self.engine.set_config('tracker_type', 'kodi')
 
         # Auto-retrieve
         if self.radiobutton_download_always.get_active():
@@ -472,7 +577,7 @@ class SettingsWindow(Gtk.Window):
 
         """Update Colors"""
         self.config['colors'] = {key: reprColor(
-            col.get_color()) for key, col in self._color_buttons.items()}
+            col.get_rgba()) for key, col in self._color_buttons.items()}
 
         utils.save_config(self.config, self.configfile)
 
@@ -483,17 +588,17 @@ class DirectoryRow(Gtk.ListBoxRow):
 
         self.directory = directory
 
-        label = Gtk.Label(directory)
+        label = Gtk.Label.new(directory)
         label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
 
-        image_button = Gtk.Image.new_from_icon_name('window-close-symbolic', 1)
+        image_button = Gtk.Image.new_from_icon_name('window-close-symbolic')
         button_remove = Gtk.Button()
-        button_remove.set_image(image_button)
+        button_remove.set_child(image_button)
         button_remove.connect('clicked', self._on_button_remove_click)
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=9)
-        box.pack_start(label, False, False, 0)
-        box.pack_end(button_remove, False, False, 0)
+        box.append(label)
+        box.append(button_remove)
 
         self.set_activatable(False)
         self.set_margin_bottom(5)
@@ -501,8 +606,9 @@ class DirectoryRow(Gtk.ListBoxRow):
         self.set_margin_end(16)
         self.set_margin_top(5)
 
-        self.add(box)
-        self.show_all()
+        self.set_child(box)
 
     def _on_button_remove_click(self, btn):
-        self.destroy()
+        parent = self.get_parent()
+        if parent:
+            parent.remove(self)

@@ -29,11 +29,12 @@ from trackma.ui.gtk.imagebox import ImageBox
 class ShowInfoBox(Gtk.Box):
     __gtype_name__ = 'ShowInfoBox'
 
-    label_title = Gtk.Template.Child()
-    data_container = Gtk.Template.Child()
-    image_container = Gtk.Template.Child()
+    label_title: Gtk.Label = Gtk.Template.Child()
+    data_container: Gtk.Box = Gtk.Template.Child()
+    image_container: Gtk.Box = Gtk.Template.Child()
+    data_label: Gtk.Label = Gtk.Template.Child()
 
-    def __init__(self, engine, orientation=Gtk.Orientation.HORIZONTAL):
+    def __init__(self, engine, vertical=False):
         Gtk.Box.__init__(self)
         self.init_template()
 
@@ -43,17 +44,10 @@ class ShowInfoBox(Gtk.Box):
         self.details = None
         self.details_e = None
 
-        self.image_box = ImageBox(225, 300)
-        self.image_box.show()
-        self.image_container.pack_start(self.image_box, False, False, 0)
-
-        self.data_label = Gtk.Label('')
-        self.data_label.set_line_wrap(True)
-        self.data_label.set_property('selectable', True)
-
-        if isinstance(orientation, Gtk.Orientation):
-            self.data_container.set_orientation(orientation)
-        self.data_container.pack_start(self.data_label, True, True, 0)
+        self.image_box = ImageBox()
+        self.image_box.set_size_request(225, 300)
+        self.image_container.append(self.image_box)
+        self.data_container.set_orientation(Gtk.Orientation.VERTICAL if vertical else Gtk.Orientation.HORIZONTAL)
 
     def set_size(self, w, h):
         self.scrolled_sidebox.set_size_request(w, h)

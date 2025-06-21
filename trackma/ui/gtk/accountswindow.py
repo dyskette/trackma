@@ -40,28 +40,29 @@ class AccountsWindow(Gtk.Dialog):
         'account-open': (GObject.SignalFlags.RUN_FIRST, None, (int, bool))
     }
 
-    internal_box = Gtk.Template.Child()
-    accounts_frame = Gtk.Template.Child()
-    accounts_listbox = Gtk.Template.Child()
-    revealer_action_bar = Gtk.Template.Child()
-    btn_cancel = Gtk.Template.Child()
-    btn_add = Gtk.Template.Child()
-    btn_new_confirm = Gtk.Template.Child()
-    btn_new_cancel = Gtk.Template.Child()
-    btn_edit_confirm = Gtk.Template.Child()
-    remember_switch = Gtk.Template.Child()
-    accounts_stack = Gtk.Template.Child()
-    accounts_combo = Gtk.Template.Child()
-    password_label = Gtk.Template.Child()
-    password_entry = Gtk.Template.Child()
-    username_label = Gtk.Template.Child()
-    username_entry = Gtk.Template.Child()
-    btn_pin_request = Gtk.Template.Child()
+    internal_box: Gtk.Box = Gtk.Template.Child()
+    accounts_frame: Gtk.Frame = Gtk.Template.Child()
+    accounts_listbox: Gtk.ListBox = Gtk.Template.Child()
+    action_bar: Gtk.ActionBar = Gtk.Template.Child()
+    btn_cancel: Gtk.Button = Gtk.Template.Child()
+    btn_add: Gtk.Button = Gtk.Template.Child()
+    btn_new_confirm: Gtk.Button = Gtk.Template.Child()
+    btn_new_cancel: Gtk.Button = Gtk.Template.Child()
+    btn_edit_confirm: Gtk.Button = Gtk.Template.Child()
+    remember_switch: Gtk.Switch = Gtk.Template.Child()
+    accounts_stack: Gtk.Stack = Gtk.Template.Child()
+    accounts_combo: Gtk.DropDown = Gtk.Template.Child()
+    password_label: Gtk.Label = Gtk.Template.Child()
+    password_entry: Gtk.Entry = Gtk.Template.Child()
+    username_label: Gtk.Label = Gtk.Template.Child()
+    username_entry: Gtk.Entry = Gtk.Template.Child()
+    btn_pin_request: Gtk.Button = Gtk.Template.Child()
 
     def __init__(self, manager, transient_for=None):
         Gtk.Dialog.__init__(self, use_header_bar=True,
                             transient_for=transient_for)
         self.init_template()
+        self.set_title("Accounts")
 
         self.accounts = []
         self.pixbufs = {}
@@ -79,9 +80,18 @@ class AccountsWindow(Gtk.Dialog):
         self._refresh_pixbufs()
         self._refresh_list()
         self._populate_combobox()
+        self._show_accounts_list()
 
     def _remove_border(self):
-        self.internal_box.set_border_width(0)
+        # In GTK4, use CSS to remove borders instead of set_border_width
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+        .accounts-dialog {
+            border: none;
+        }
+        """)
+        self.get_style_context().add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.get_style_context().add_class("accounts-dialog")
 
     def _add_separators(self):
         self.accounts_listbox.set_header_func(
@@ -110,7 +120,7 @@ class AccountsWindow(Gtk.Dialog):
 
     def _refresh_list(self):
         for account in self.accounts:
-            account.destroy()
+            self.accounts_listbox.remove(account)
 
         self.accounts = []
 
@@ -138,7 +148,7 @@ class AccountsWindow(Gtk.Dialog):
                     'active': False
                 })
 
-            self.accounts_listbox.add(account)
+            self.accounts_listbox.append(account)
             self.accounts.append(account)
 
         if not self.accounts:
@@ -159,7 +169,7 @@ class AccountsWindow(Gtk.Dialog):
     @Gtk.Template.Callback()
     def _on_row_selected(self, list_box, row):
         reveal = row is not None
-        self.revealer_action_bar.set_reveal_child(reveal)
+        self.action_bar.set_revealed(reveal)
 
     @Gtk.Template.Callback()
     def _on_row_activated(self, list_box, row):
@@ -182,8 +192,9 @@ class AccountsWindow(Gtk.Dialog):
     @Gtk.Template.Callback()
     def _on_btn_delete_clicked(self, btn):
         row = self.accounts_listbox.get_selected_row()
-        self.manager.delete_account(row.get_account_id())
-        row.destroy()
+        if row is not None:
+            self.manager.delete_account(row.get_account_id())
+            self.accounts_listbox.remove(row)
 
     @Gtk.Template.Callback()
     def _on_btn_add_clicked(self, btn):
@@ -207,9 +218,12 @@ class AccountsWindow(Gtk.Dialog):
 
     def _show_edit(self):
         row = self.accounts_listbox.get_selected_row()
+        if row is None:
+            return
         self.account_edit = self.manager.get_account(row.get_account_id())
         self.account_edit['account_id'] = row.get_account_id()
 
+        # Set title on the header bar for GTK4
         self.set_title("Edit account")
         self._clear_new_account()
 
@@ -218,7 +232,14 @@ class AccountsWindow(Gtk.Dialog):
         else:
             self._show_password_account()
 
-        self.accounts_combo.set_active_iter(self.treeiters[row.get_libname()])
+        # Find the index of the current API in the dropdown
+        api_name = utils.available_libs[self.account_edit['api']][0]
+        for i in range(self.accounts_combo.get_model().get_n_items()):
+            item = self.accounts_combo.get_model().get_item(i)
+            if item.get_string() == api_name:
+                self.accounts_combo.set_selected(i)
+                break
+
         self.username_entry.set_text(self.account_edit['username'])
         self.password_entry.set_text(self.account_edit['password'])
 
@@ -236,6 +257,7 @@ class AccountsWindow(Gtk.Dialog):
             'new_account', Gtk.StackTransitionType.SLIDE_LEFT)
 
     def _show_add_new(self):
+        # Set title on the header bar for GTK4
         self.set_title("Add account")
         self._clear_new_account()
         self.btn_new_confirm.show()
@@ -262,16 +284,15 @@ class AccountsWindow(Gtk.Dialog):
             'accounts', Gtk.StackTransitionType.SLIDE_RIGHT)
 
     def _populate_combobox(self):
-        model_api = Gtk.ListStore(str, str, GdkPixbuf.Pixbuf)
-
-        for (libname, lib) in sorted(utils.available_libs.items()):
-            self.treeiters[libname] = model_api.append(
-                [libname, lib[0], self.pixbufs[libname]])
-
-        self.accounts_combo.set_model(model_api)
+        # Create a GtkStringList for the dropdown
+        api_list = Gtk.StringList()
+        for (libname, lib) in utils.available_libs.items():
+            api_list.append(lib[0])
+        
+        self.accounts_combo.set_model(api_list)
 
     @Gtk.Template.Callback()
-    def _on_accounts_combo_changed(self, combo):
+    def _on_accounts_combo_changed(self, combo, param):
         self.username_entry.set_text("")
         self.password_entry.set_text("")
         api = self._get_combo_active_api_name()
@@ -297,7 +318,7 @@ class AccountsWindow(Gtk.Dialog):
         webbrowser.open(auth_url, 2, True)
 
     def _clear_new_account(self):
-        self.accounts_combo.set_active_id(None)
+        self.accounts_combo.set_selected(0)  # Set to first item
         self.username_entry.set_text("")
         self.password_entry.set_text("")
 
@@ -314,12 +335,18 @@ class AccountsWindow(Gtk.Dialog):
         self.btn_pin_request.hide()
 
     def _get_combo_active_api_name(self):
-        apiiter = self.accounts_combo.get_active_iter()
-
-        if not apiiter:
+        selected_item = self.accounts_combo.get_selected_item()
+        if not selected_item:
             return None
 
-        return self.accounts_combo.get_model().get(apiiter, 0)[0]
+        selected_text = selected_item.get_string()
+        
+        # Find the API name that matches the selected text
+        for (libname, lib) in utils.available_libs.items():
+            if lib[0] == selected_text:
+                return libname
+        
+        return None
 
     @Gtk.Template.Callback()
     def _on_username_entry_changed(self, entry):
@@ -372,9 +399,9 @@ class AccountsWindow(Gtk.Dialog):
 class AccountRow(Gtk.ListBoxRow):
     __gtype_name__ = 'AccountRow'
 
-    account_logo = Gtk.Template.Child()
-    account_username = Gtk.Template.Child()
-    account_api = Gtk.Template.Child()
+    account_logo: Gtk.Image = Gtk.Template.Child()
+    account_username: Gtk.Label = Gtk.Template.Child()
+    account_api: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self, account):
         Gtk.ListBoxRow.__init__(self)

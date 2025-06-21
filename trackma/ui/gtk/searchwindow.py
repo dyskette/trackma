@@ -57,12 +57,13 @@ class SearchWindow(Gtk.Window):
                          (str,))
     }
 
-    btn_add_show = Gtk.Template.Child()
-    search_paned = Gtk.Template.Child()
-    shows_viewport = Gtk.Template.Child()
-    show_info_container = Gtk.Template.Child()
-    progress_spinner = Gtk.Template.Child()
-    headerbar = Gtk.Template.Child()
+    btn_add_show: Gtk.Button = Gtk.Template.Child()
+    search_paned: Gtk.Paned = Gtk.Template.Child()
+    shows_viewport: Gtk.ScrolledWindow = Gtk.Template.Child()
+    show_info_container: Gtk.Box = Gtk.Template.Child()
+    progress_spinner: Gtk.Spinner = Gtk.Template.Child()
+    headerbar: Gtk.HeaderBar = Gtk.Template.Child()
+    subtitle_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self, engine, colors, current_status, transient_for=None):
         Gtk.Window.__init__(self, transient_for=transient_for)
@@ -78,14 +79,12 @@ class SearchWindow(Gtk.Window):
         self.showlist = SearchTreeView(colors)
         self.showlist.get_selection().connect("changed", self._on_selection_changed)
         self.showlist.set_size_request(250, 350)
-        self.showlist.show()
 
-        self.info = ShowInfoBox(engine, orientation=Gtk.Orientation.VERTICAL)
+        self.info = ShowInfoBox(engine, vertical=True)
         self.info.set_size_request(200, 350)
-        self.info.show()
 
-        self.shows_viewport.add(self.showlist)
-        self.show_info_container.pack_start(self.info, True, True, 0)
+        self.shows_viewport.set_child(self.showlist)
+        self.show_info_container.append(self.info)
         self.search_paned.set_position(400)
         self.set_size_request(450, 350)
 
@@ -105,14 +104,14 @@ class SearchWindow(Gtk.Window):
         if self._search_thread:
             self._search_thread.stop()
 
-        self.headerbar.set_subtitle("Searching: \"%s\"" % text)
+        self.subtitle_label.set_label("Searching: \"%s\"" % text)
         self._search_thread = SearchThread(self._engine,
                                            text,
                                            self._search_finish_idle)
         self._search_thread.start()
 
     def _search_finish(self):
-        self.headerbar.set_subtitle(
+        self.subtitle_label.set_label(
             "%s result%s." % ((len(self._entries), 's')
                               if len(self._entries) > 0
                               else ('No', '')
@@ -166,6 +165,10 @@ class SearchWindow(Gtk.Window):
             self.info.load(self._showdict[self._selected_show])
             self.btn_add_show.set_sensitive(True)
 
+    def refresh_colors(self, colors):
+        """Refresh colors in the search window after settings change"""
+        self.showlist.refresh_colors(colors)
+
 
 class SearchTreeView(Gtk.TreeView):
     def __init__(self, colors):
@@ -204,7 +207,6 @@ class SearchTreeView(Gtk.TreeView):
         self.colors = colors
 
     def append_start(self):
-        self.freeze_child_notify()
         self.store.clear()
 
     def append(self, show):
@@ -224,5 +226,10 @@ class SearchTreeView(Gtk.TreeView):
         self.store.append(row)
 
     def append_finish(self):
-        self.thaw_child_notify()
         self.store.set_sort_column_id(1, Gtk.SortType.ASCENDING)
+
+    def refresh_colors(self, colors):
+        """Refresh colors in the search tree view after settings change"""
+        self.colors = colors
+        # Force a redraw to apply new colors
+        self.queue_draw()
