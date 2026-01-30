@@ -241,11 +241,11 @@ class ShowListPage(Adw.NavigationPage):
         )
         self._list_view.connect("activate", self._on_row_activated)
 
-        scrolled = Gtk.ScrolledWindow(
+        self._scrolled = Gtk.ScrolledWindow(
             hscrollbar_policy=Gtk.PolicyType.NEVER,
             vexpand=True,
         )
-        scrolled.set_child(self._list_view)
+        self._scrolled.set_child(self._list_view)
 
         self._empty_page = Adw.StatusPage(
             icon_name="view-list-symbolic",
@@ -254,7 +254,7 @@ class ShowListPage(Adw.NavigationPage):
         )
 
         self._content_stack = Gtk.Stack()
-        self._content_stack.add_named(scrolled, "list")
+        self._content_stack.add_named(self._scrolled, "list")
         self._content_stack.add_named(self._empty_page, "empty")
 
         self._filter_model.connect("items-changed", self._update_empty_state)
@@ -350,10 +350,20 @@ class ShowListPage(Adw.NavigationPage):
                     self._content_store.append(item)
 
         self._update_empty_state()
+        self._scroll_to_top()
 
         # On collapsed layout, show the content page
         if self._split_view.get_collapsed():
             self._split_view.set_show_content(True)
+
+    def _scroll_to_top(self) -> None:
+        """Scroll the list view back to the top after layout settles."""
+        GLib.idle_add(self._do_scroll_to_top)
+
+    def _do_scroll_to_top(self) -> bool:
+        """Set scroll position to top."""
+        self._scrolled.get_vadjustment().set_value(0)
+        return GLib.SOURCE_REMOVE
 
     def _update_empty_state(self, *_args: Any) -> None:
         """Toggle between the list view and the empty status page."""
@@ -505,6 +515,7 @@ class ShowListPage(Adw.NavigationPage):
                 if item is not None:
                     self._content_store.append(item)
         self._update_empty_state()
+        self._scroll_to_top()
 
     # -- Search ----------------------------------------------------------------
 
