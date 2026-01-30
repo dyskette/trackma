@@ -54,7 +54,6 @@ class ShowDetailPage(Adw.NavigationPage):
         self._applying = False
 
         self._build_ui()
-        self._connect_engine_signals()
         self._fetch_details()
 
     # -- UI construction -------------------------------------------------------
@@ -427,61 +426,6 @@ class ShowDetailPage(Adw.NavigationPage):
                 nav.pop()
         except Exception as e:
             self._show_toast(f"Failed to delete: {e}")
-
-    # -- Engine signal handling ------------------------------------------------
-
-    def _connect_engine_signals(self) -> None:
-        """Connect to engine signals for external updates."""
-        self._engine.connect_signal("episode_changed", self._on_engine_episode)
-        self._engine.connect_signal("score_changed", self._on_engine_score)
-        self._engine.connect_signal("status_changed", self._on_engine_status)
-
-    def _on_engine_episode(self, show: dict[str, Any]) -> None:
-        """Handle episode change from engine (e.g. tracker)."""
-        if show.get("id") != self._show_id:
-            return
-        GLib.idle_add(self._apply_episode, show)
-
-    def _apply_episode(self, show: dict[str, Any]) -> bool:
-        """Update episode widget from engine data."""
-        self._show = show
-        self._applying = True
-        if hasattr(self, "_episode_row"):
-            self._episode_row.set_value(float(show.get("my_progress", 0)))
-        self._applying = False
-        return GLib.SOURCE_REMOVE
-
-    def _on_engine_score(self, show: dict[str, Any]) -> None:
-        """Handle score change from engine."""
-        if show.get("id") != self._show_id:
-            return
-        GLib.idle_add(self._apply_score, show)
-
-    def _apply_score(self, show: dict[str, Any]) -> bool:
-        """Update score widget from engine data."""
-        self._show = show
-        self._applying = True
-        if hasattr(self, "_score_row"):
-            self._score_row.set_value(float(show.get("my_score", 0)))
-        self._applying = False
-        return GLib.SOURCE_REMOVE
-
-    def _on_engine_status(self, show: dict[str, Any], old_status: str | int) -> None:
-        """Handle status change from engine."""
-        if show.get("id") != self._show_id:
-            return
-        GLib.idle_add(self._apply_status, show)
-
-    def _apply_status(self, show: dict[str, Any]) -> bool:
-        """Update status widget from engine data."""
-        self._show = show
-        self._applying = True
-        if hasattr(self, "_status_row"):
-            new_status = show.get("my_status", 0)
-            if new_status in self._status_keys:
-                self._status_row.set_selected(self._status_keys.index(new_status))
-        self._applying = False
-        return GLib.SOURCE_REMOVE
 
     # -- Async details fetch ---------------------------------------------------
 
