@@ -30,6 +30,8 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 if TYPE_CHECKING:
     from trackma.engine import Engine
 
+from trackma.ui.gtk4.show_detail import IMAGE_HEIGHT, IMAGE_WIDTH, load_show_image
+
 logger = logging.getLogger(__name__)
 
 
@@ -381,6 +383,7 @@ class SearchDetailPage(Adw.NavigationPage):
         box.set_margin_start(12)
         box.set_margin_end(12)
 
+        self._build_image(box)
         self._build_progress_group(box)
         self._build_dates_group(box)
         self._build_tags_group(box)
@@ -391,6 +394,21 @@ class SearchDetailPage(Adw.NavigationPage):
         scrolled.set_child(clamp)
         toolbar.set_content(scrolled)
         self.set_child(toolbar)
+
+    def _build_image(self, parent: Gtk.Box) -> None:
+        """Build a centered cover image widget."""
+        self._picture = Gtk.Picture(
+            content_fit=Gtk.ContentFit.CONTAIN,
+            can_shrink=True,
+            halign=Gtk.Align.CENTER,
+        )
+        self._picture.set_size_request(IMAGE_WIDTH, IMAGE_HEIGHT)
+
+        api_info = self._engine.api_info
+        mediatype = api_info.get("mediatype", "")
+        load_show_image(self._show, self._picture, api_info, mediatype)
+
+        parent.append(self._picture)
 
     # -- Editable field groups (mirror ShowDetailPage) --------------------------
 

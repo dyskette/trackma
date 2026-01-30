@@ -14,20 +14,78 @@ from __future__ import annotations
 import datetime
 import html
 import logging
+import os
 import re
 import threading
+import urllib.request
 from typing import TYPE_CHECKING, Any
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
+
+from trackma import utils
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
 
 logger = logging.getLogger(__name__)
+
+IMAGE_WIDTH = 200
+IMAGE_HEIGHT = 300
+
+
+def load_show_image(
+    show: dict[str, Any],
+    picture: Gtk.Picture,
+    api_info: dict[str, Any],
+    mediatype: str,
+) -> None:
+    """Load a show's cover image into a Gtk.Picture, with caching.
+
+    Downloads the image in a background thread, caches it to disk,
+    and sets the texture on the main thread via ``GLib.idle_add``.
+    """
+    url = show.get("image") or show.get("image_thumb") or ""
+    if not url:
+        return
+
+    show_id = show.get("id", 0)
+    api_short = api_info.get("shortname", "unknown")
+    cache_file = utils.to_cache_path(f"{api_short}_{mediatype}_{show_id}.jpg")
+
+    def _apply_texture(path: str) -> bool:
+        try:
+            texture = Gdk.Texture.new_from_filename(path)
+            picture.set_paintable(texture)
+        except Exception as e:
+            logger.debug("Failed to load texture from %s: %s", path, e)
+        return GLib.SOURCE_REMOVE
+
+    if os.path.isfile(cache_file):
+        GLib.idle_add(_apply_texture, cache_file)
+        return
+
+    def _download() -> None:
+        try:
+            cache_dir = os.path.dirname(cache_file)
+            os.makedirs(cache_dir, exist_ok=True)
+
+            request = urllib.request.Request(url)
+            request.add_header("User-Agent", f"TrackmaImage/{utils.VERSION}")
+            data = urllib.request.urlopen(request).read()
+
+            with open(cache_file, "wb") as f:
+                f.write(data)
+
+            GLib.idle_add(_apply_texture, cache_file)
+        except Exception as e:
+            logger.debug("Failed to download image %s: %s", url, e)
+
+    thread = threading.Thread(target=_download, daemon=True)
+    thread.start()
 
 
 class ShowDetailPage(Adw.NavigationPage):
@@ -83,6 +141,7 @@ class ShowDetailPage(Adw.NavigationPage):
         box.set_margin_start(12)
         box.set_margin_end(12)
 
+        self._build_image(box)
         self._build_progress_group(box)
         self._build_dates_group(box)
         self._build_tags_group(box)
@@ -93,6 +152,21 @@ class ShowDetailPage(Adw.NavigationPage):
         scrolled.set_child(clamp)
         toolbar.set_content(scrolled)
         self.set_child(toolbar)
+
+    def _build_image(self, parent: Gtk.Box) -> None:
+        """Build a centered cover image widget."""
+        self._picture = Gtk.Picture(
+            content_fit=Gtk.ContentFit.CONTAIN,
+            can_shrink=True,
+            halign=Gtk.Align.CENTER,
+        )
+        self._picture.set_size_request(IMAGE_WIDTH, IMAGE_HEIGHT)
+
+        api_info = self._engine.api_info
+        mediatype = self._engine.api_info.get("mediatype", "")
+        load_show_image(self._show, self._picture, api_info, mediatype)
+
+        parent.append(self._picture)
 
     def _build_menu_button(self) -> Gtk.MenuButton:
         """Build the header bar menu with Delete and Open URL."""
