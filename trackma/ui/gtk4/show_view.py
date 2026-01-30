@@ -22,7 +22,8 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
@@ -400,7 +401,7 @@ class ShowListPage(Adw.NavigationPage):
         title_label = Gtk.Label(
             xalign=0,
             hexpand=True,
-            ellipsize=3,  # Pango.EllipsizeMode.END
+            ellipsize=Pango.EllipsizeMode.END,  # Pango.EllipsizeMode.END
         )
         title_label.add_css_class("body")
 
@@ -620,7 +621,7 @@ class ShowListPage(Adw.NavigationPage):
         for _status, store in stores:
             for i in range(store.get_n_items()):
                 obj = store.get_item(i)
-                if obj is not None and obj.show_id == show_id:
+                if isinstance(obj, ShowObject) and obj.show_id == show_id:
                     return store, i, obj
         return None
 

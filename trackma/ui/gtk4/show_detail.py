@@ -307,9 +307,11 @@ class ShowDetailPage(Adw.NavigationPage):
 
         calendar = Gtk.Calendar()
         if date_value is not None:
-            calendar.select_day(
-                GLib.DateTime.new_local(date_value.year, date_value.month, date_value.day, 0, 0, 0)
+            gdt = GLib.DateTime.new_local(
+                date_value.year, date_value.month, date_value.day, 0, 0, 0,
             )
+            if gdt is not None:
+                calendar.select_day(gdt)
         calendar.connect("day-selected", on_selected, row)
 
         clear_btn = Gtk.Button(label="Clear")

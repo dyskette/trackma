@@ -232,7 +232,9 @@ class AccountPage(Adw.NavigationPage):
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
         dialog.connect("response", self._on_delete_response, account_num)
-        dialog.present(self.get_root())
+        root = self.get_root()
+        parent = root if isinstance(root, Gtk.Widget) else None
+        dialog.present(parent)
 
     def _on_delete_response(
         self, _dialog: Adw.AlertDialog, response: str, account_num: int
@@ -413,7 +415,9 @@ class AddAccountPage(Adw.NavigationPage):
         self._update_confirm_sensitivity()
 
         launcher = Gtk.UriLauncher(uri=auth_url)
-        launcher.launch(self.get_root(), None, None)
+        root = self.get_root()
+        parent = root if isinstance(root, Gtk.Window) else None
+        launcher.launch(parent, None, None)
 
     def _on_fields_changed(self, _row: Adw.EntryRow) -> None:
         """Re-evaluate the *Add* button state when input changes."""
@@ -571,7 +575,9 @@ class EditAccountPage(Adw.NavigationPage):
         self._update_save_sensitivity()
 
         launcher = Gtk.UriLauncher(uri=auth_url)
-        launcher.launch(self.get_root(), None, None)
+        root = self.get_root()
+        parent = root if isinstance(root, Gtk.Window) else None
+        launcher.launch(parent, None, None)
 
     def _on_fields_changed(self, _row: Adw.EntryRow) -> None:
         """Re-evaluate the *Save* button state when input changes."""

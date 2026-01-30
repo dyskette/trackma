@@ -25,7 +25,8 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
@@ -189,10 +190,10 @@ class SearchPage(Adw.NavigationPage):
         box.set_margin_top(8)
         box.set_margin_bottom(8)
 
-        title_label = Gtk.Label(xalign=0, ellipsize=3)
+        title_label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         title_label.add_css_class("body")
 
-        subtitle_label = Gtk.Label(xalign=0, ellipsize=3)
+        subtitle_label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         subtitle_label.add_css_class("dim-label")
         subtitle_label.add_css_class("caption")
 
@@ -733,7 +734,7 @@ class SearchDetailPage(Adw.NavigationPage):
             if status is not None and "episode" in values:
                 try:
                     current = self._engine.get_show_info(showid=show_id)
-                    if current.get("my_status") != status:
+                    if current is not None and current.get("my_status") != status:
                         self._engine.set_status(show_id, status)
                 except Exception as e:
                     logger.warning("Failed to restore status on add: %s", e)

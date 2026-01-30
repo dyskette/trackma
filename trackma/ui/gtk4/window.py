@@ -162,7 +162,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.show_toast(f"Engine error: {message}", timeout=5)
         return GLib.SOURCE_REMOVE
 
-    def _on_switch_account(self, _button: Gtk.Button) -> None:
+    def _on_switch_account(self, _button: Gtk.Button | None = None) -> None:
         """Unload the current engine and return to the account page."""
         if self._engine is not None:
             try:
