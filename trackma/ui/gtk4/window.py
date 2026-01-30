@@ -28,6 +28,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk
 
 from trackma.ui.gtk4.accounts import AccountPage
+from trackma.ui.gtk4.show_view import ShowListPage
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
@@ -75,12 +76,6 @@ class MainWindow(Adw.ApplicationWindow):
         self._nav_view.add(self._account_page)
 
         self.set_content(self._toast_overlay)
-
-    def _build_menu(self) -> Gio.Menu:
-        """Build the primary hamburger menu for the library page."""
-        menu = Gio.Menu()
-        menu.append("About Trackma", "app.about")
-        return menu
 
     # -- Account selection ---------------------------------------------------
 
@@ -150,35 +145,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._engine = engine
         self._app._engine = engine
 
-        list_page = Adw.NavigationPage(title="Library")
-        list_toolbar = Adw.ToolbarView()
-
-        header = Adw.HeaderBar()
-        menu_button = Gtk.MenuButton(
-            icon_name="open-menu-symbolic",
-            menu_model=self._build_menu(),
-        )
-        header.pack_end(menu_button)
-
-        accounts_button = Gtk.Button(
-            icon_name="system-users-symbolic",
-            tooltip_text="Switch Account",
-        )
-        accounts_button.connect("clicked", self._on_switch_account)
-        header.pack_start(accounts_button)
-
-        list_toolbar.add_top_bar(header)
-
-        api_info = engine.api_info
-        status_page = Adw.StatusPage(
-            icon_name="emblem-ok-symbolic",
-            title=api_info["name"],
-            description=f"Logged in as {engine.get_userconfig('username')}\n"
-            "List view coming soon",
-        )
-        list_toolbar.set_content(status_page)
-        list_page.set_child(list_toolbar)
-
+        list_page = ShowListPage(engine=engine)
+        list_page.connect("switch-account", lambda _p: self._on_switch_account(None))
         self._nav_view.replace([list_page])
         return GLib.SOURCE_REMOVE
 
