@@ -216,7 +216,7 @@ description = "Python Imaging Library (Fork)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"gtk\" or extra == \"qt\" or extra == \"ui\""
+markers = "extra == \"gtk\" or extra == \"gtk4\" or extra == \"qt\" or extra == \"ui\""
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -342,7 +342,7 @@ description = "Python interface for cairo"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"gtk\" or extra == \"ui\""
+markers = "extra == \"gtk\" or extra == \"gtk4\" or extra == \"ui\""
 files = [
     {file = "pycairo-1.26.1-cp310-cp310-win32.whl", hash = "sha256:b93b9e3072826a346f1f79cb1becc403d1ba4a3971cad61d144db0fe6dcb6be8"},
     {file = "pycairo-1.26.1-cp310-cp310-win_amd64.whl", hash = "sha256:acfc76924ed668d8fea50f6cc6097b9a57ef6cd3dc3f2fa20814380d639a6dd2"},
@@ -368,7 +368,7 @@ description = "Python bindings for GObject Introspection"
 optional = true
 python-versions = "<4,>=3.8"
 groups = ["main"]
-markers = "extra == \"gtk\" or extra == \"ui\""
+markers = "extra == \"gtk\" or extra == \"gtk4\" or extra == \"ui\""
 files = [
     {file = "pygobject-3.48.2.tar.gz", hash = "sha256:c3c0a7afbe5b2c1c64dc0530109b4dd571085153dbedfbccb8ec7c5ad233f977"},
 ]
@@ -619,6 +619,7 @@ anitopy = ["anitopy"]
 curses = ["urwid"]
 discord-rpc = ["pypresence"]
 gtk = ["pillow", "pycairo", "pygobject"]
+gtk4 = ["pillow", "pycairo", "pygobject"]
 qt = ["pillow", "pyqt6"]
 trackers = ["inotify", "jeepney", "pyinotify"]
 twitter = ["requests-oauthlib", "twitter"]
@@ -627,4 +628,4 @@ ui = ["pillow", "pycairo", "pygobject", "pyqt6", "urwid"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "429e37a2c195b660ff2f5a77f947703bb04dd0c3ef0966eb5b175eb4a1171f00"
+content-hash = "10ce31ab0e8e92109ad2c74601cfd17bea2236dd6adbea7179979e66d0d716a0"

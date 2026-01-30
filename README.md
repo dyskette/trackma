@@ -10,7 +10,7 @@ Features
 - Manage local list and synchronize when necessary, useful when offline
 - Manage multiple accounts on different media tracking sites
 - Support for several media types (as supported by the site)
-- Multiple user interfaces (Qt, GTK, curses, command-line)
+- Multiple user interfaces (Qt, GTK4, GTK3, curses, command-line)
 - Detection of running media player, updates list if necessary
 - Ability to launch media player for a requested media in the list and update list if necessary
 - Highly scalable, easy to code new interfaces and support for other sites
@@ -59,6 +59,7 @@ The following user interfaces are available and their requirements are as follow
 | UI | Dependencies |
 | --- | --- |
 | Qt | PyQt6 (`python-pyqt6`) |
+| GTK4 | PyGI (`python3-gi`, `python3-cairo`), GTK4, libadwaita |
 | GTK 3 | PyGI (`python3-gi` and `python3-cairo`) |
 | curses | Urwid (`python3-urwid`) |
 | CLI | None |
@@ -131,7 +132,8 @@ The following extras are available:
 
 | Extra | Description |
 | --- | --- |
-| `gtk` | The GTK interface. |
+| `gtk` | The GTK 3 interface. |
+| `gtk4` | The GTK4/libadwaita interface. |
 | `qt` | The Qt interface. |
 | `curses` | The curses-based TUI. |
 | `ui` | All user interfaces. |
@@ -158,6 +160,7 @@ Then you can run the program with the interface you like.
 $ trackma
 $ trackma-curses
 $ trackma-gtk
+$ trackma-gtk4
 $ trackma-qt
 ```
 
@@ -178,6 +181,7 @@ Then you can run the interface you like in your virtual environment managed by p
 $ poetry run trackma
 $ poetry run trackma-curses
 $ poetry run trackma-gtk
+$ poetry run trackma-gtk4
 $ poetry run trackma-qt
 ```
 
@@ -202,7 +206,7 @@ Clone the repo and create the virtual environment using `poetry`:
 $ git clone --recursive https://github.com/z411/trackma.git
 $ cd trackma
 $ poetry install --all-extras
-$ poetry shell
+$ poetry env activate
 ```
 
 Use the above commands from the [poetry](#poetry) section

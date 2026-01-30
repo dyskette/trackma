@@ -45,6 +45,7 @@ anitopy = {version = "^2.0.0", optional = true}
 
 [tool.poetry.extras]
 gtk = ["pygobject", "pycairo", "pillow"]
+gtk4 = ["pygobject", "pycairo", "pillow"]
 qt = ["pyqt6", "pillow"]
 curses = ["urwid"]
 ui = ["pygobject", "pycairo", "pillow", "pyqt6", "urwid"]
@@ -57,6 +58,7 @@ anitopy = ["anitopy"]
 trackma = "trackma.ui.cli:main"
 trackma-curses = "trackma.ui.curses:main"
 trackma-gtk = "trackma.ui.gtk:main"
+trackma-gtk4 = "trackma.ui.gtk4:main"
 trackma-qt = "trackma.ui.qt:main"
 
 [build-system]
