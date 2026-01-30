@@ -12,7 +12,9 @@ Engine methods.
 from __future__ import annotations
 
 import datetime
+import html
 import logging
+import re
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -503,9 +505,22 @@ class ShowDetailPage(Adw.NavigationPage):
                 continue
             if isinstance(value, list):
                 value = ", ".join(str(v) for v in value)
-            row = Adw.ActionRow(title=str(label), subtitle=str(value))
-            row.set_subtitle_lines(5)
+            text = str(value)
+            # Strip HTML tags and decode entities from API responses
+            # Convert HTML line breaks to plain text newlines:
+            # multiple <br> in sequence → paragraph break, single <br> → line break
+            paragraph_break = r"(<br\s*/?\s*>\s*){2,}"
+            single_line_break = r"<br\s*/?\s*>"
+            any_html_tag = r"<[^>]+>"
+            text = re.sub(paragraph_break, "\n\n", text)
+            text = re.sub(single_line_break, "\n", text)
+            text = re.sub(any_html_tag, "", text)
+            text = html.unescape(text)
+            row = Adw.ActionRow()
             row.set_use_markup(False)
+            row.set_title(str(label))
+            row.set_subtitle(text)
+            row.set_subtitle_lines(5)
             self._details_group.add(row)
         return GLib.SOURCE_REMOVE
 
