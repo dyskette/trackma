@@ -26,6 +26,7 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
+    from trackma.ui.gtk4.show_detail import ShowDetailPage
 
 logger = logging.getLogger(__name__)
 
@@ -236,8 +237,9 @@ class ShowListPage(Adw.NavigationPage):
         self._list_view = Gtk.ListView(
             model=selection,
             factory=factory,
-            single_click_activate=False,
+            single_click_activate=True,
         )
+        self._list_view.connect("activate", self._on_row_activated)
 
         scrolled = Gtk.ScrolledWindow(
             hscrollbar_policy=Gtk.PolicyType.NEVER,
@@ -513,6 +515,49 @@ class ShowListPage(Adw.NavigationPage):
             self._string_filter.set_search(query)
         else:
             self._string_filter.set_search("")
+
+    # -- Row activation --------------------------------------------------------
+
+    def _on_row_activated(self, list_view: Gtk.ListView, position: int) -> None:
+        """Open the detail page for the activated show.
+
+        Finds the ``AdwNavigationView`` ancestor and pushes a
+        ``ShowDetailPage`` onto it.
+
+        Args:
+            list_view: The ``GtkListView``.
+            position: Index of the activated item in the selection model.
+        """
+        model = list_view.get_model()
+        if model is None:
+            return
+        show_obj: ShowObject | None = model.get_item(position)  # type: ignore[assignment]
+        if show_obj is None:
+            return
+
+        show_data = show_obj.get_data()
+        if not show_data:
+            return
+
+        # Walk up to find the NavigationView
+        nav_view = self._find_nav_view()
+        if nav_view is None:
+            logger.warning("No AdwNavigationView found for detail push")
+            return
+
+        from trackma.ui.gtk4.show_detail import ShowDetailPage
+
+        detail_page = ShowDetailPage(engine=self._engine, show_data=show_data)
+        nav_view.push(detail_page)
+
+    def _find_nav_view(self) -> Adw.NavigationView | None:
+        """Walk up the widget tree to find the nearest NavigationView."""
+        widget: Gtk.Widget | None = self.get_parent()
+        while widget is not None:
+            if isinstance(widget, Adw.NavigationView):
+                return widget
+            widget = widget.get_parent()
+        return None
 
     # -- Engine signals --------------------------------------------------------
 
