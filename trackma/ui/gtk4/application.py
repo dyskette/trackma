@@ -1,14 +1,18 @@
 """
 Trackma GTK4 Application.
 
-Main application class using Adw.Application. Handles lifecycle,
-actions, and coordination between the engine and UI.
+Main application class using Adw.Application. Handles the application
+lifecycle, global actions, and coordination between the engine and UI.
+
+This is the entry point for the GTK4 frontend. It owns the
+AccountManager and Engine instances, and creates the main window
+on activation.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import gi
 
@@ -19,11 +23,25 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from trackma.accounts import AccountManager
 from trackma.engine import Engine
 
+if TYPE_CHECKING:
+    from trackma.ui.gtk4.window import MainWindow
+
 logger = logging.getLogger(__name__)
 
 
 class TrackmaApplication(Adw.Application):
-    """Main Trackma GTK4 application."""
+    """Main Trackma GTK4 application.
+
+    Manages the application lifecycle following GNOME conventions:
+    ``do_startup`` for one-time setup, ``do_activate`` to present
+    the window, and ``do_shutdown`` for cleanup.
+
+    Attributes:
+        engine: The current Engine instance, or ``None`` if no
+            account has been selected yet.
+        account_manager: Shared AccountManager used by the window
+            to list, add, edit, and delete accounts.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -33,10 +51,10 @@ class TrackmaApplication(Adw.Application):
 
         self._engine: Engine | None = None
         self._account_manager = AccountManager()
-        self._window: Any = None
+        self._window: MainWindow | None = None
 
     def do_startup(self) -> None:
-        """One-time initialization."""
+        """Perform one-time initialization: actions, style, app name."""
         Adw.Application.do_startup(self)
 
         self._setup_actions()
@@ -48,7 +66,7 @@ class TrackmaApplication(Adw.Application):
         GLib.set_prgname("trackma")
 
     def do_activate(self) -> None:
-        """Show the main window."""
+        """Create the main window on first activation, then present it."""
         if self._window is None:
             from trackma.ui.gtk4.window import MainWindow
 
@@ -56,13 +74,13 @@ class TrackmaApplication(Adw.Application):
         self._window.present()
 
     def do_shutdown(self) -> None:
-        """Cleanup on exit."""
+        """Unload the engine (if running) and shut down the application."""
         if self._engine is not None:
             self._engine.unload()
         Adw.Application.do_shutdown(self)
 
     def _setup_actions(self) -> None:
-        """Register application-level actions."""
+        """Register application-level actions and keyboard accelerators."""
         actions: list[tuple[str, Any, list[str] | None]] = [
             ("quit", lambda *_: self.quit(), ["<Control>q"]),
             ("about", self._on_about, None),
@@ -75,8 +93,8 @@ class TrackmaApplication(Adw.Application):
             if accels:
                 self.set_accels_for_action(f"app.{name}", accels)
 
-    def _on_about(self, _action: Gio.SimpleAction, _param: None) -> None:
-        """Show the about dialog."""
+    def _on_about(self, _action: Gio.SimpleAction, _param: Any) -> None:
+        """Present the About dialog."""
         about = Adw.AboutDialog(
             application_name="Trackma",
             application_icon="org.trackma.Trackma",
@@ -89,8 +107,10 @@ class TrackmaApplication(Adw.Application):
 
     @property
     def engine(self) -> Engine | None:
+        """The active Engine instance, or ``None``."""
         return self._engine
 
     @property
     def account_manager(self) -> AccountManager:
+        """The shared AccountManager for this application."""
         return self._account_manager

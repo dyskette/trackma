@@ -1,8 +1,21 @@
 """
-Trackma GTK4 Account Selection Page.
+Trackma GTK4 Account Management Pages.
 
-Provides an AdwNavigationPage for selecting existing accounts and adding
-new ones. Communicates account selection via the ``account-open`` signal.
+Provides navigation pages for selecting, adding, editing, and deleting
+user accounts.  All pages are ``AdwNavigationPage`` subclasses designed
+to be pushed onto the parent ``AdwNavigationView`` owned by the main
+window.
+
+Auth flow overview:
+
+* **PASSWD** (Kitsu, VNDB) — username and password entered directly.
+* **OAUTH** (AniList, Shikimori) — user clicks *Request PIN* to open
+  the provider's authorization page in the browser, then pastes the
+  resulting PIN back into the form.
+* **OAUTH_PKCE** (MyAnimeList) — same as OAUTH but a PKCE
+  ``code_verifier`` is generated and appended to the authorization URL.
+  The verifier is stored in the account's ``extra`` dict for the
+  subsequent token exchange performed by the engine.
 """
 
 from __future__ import annotations
@@ -25,8 +38,18 @@ logger = logging.getLogger(__name__)
 class AccountPage(Adw.NavigationPage):
     """Account selection page shown at startup.
 
+    Displays a boxed list of existing accounts.  Each row is
+    activatable (emits ``account-open``) and carries edit/delete
+    suffix buttons.  When no accounts exist, an ``AdwStatusPage``
+    prompts the user to add one.
+
+    Args:
+        account_manager: The shared ``AccountManager`` instance.
+        **kwargs: Forwarded to ``Adw.NavigationPage``.
+
     Signals:
-        account-open(account_num: int): Emitted when the user selects an account.
+        account-open(account_num: int): Emitted when the user
+            activates an account row.
     """
 
     __gtype_name__ = "TrackmaAccountPage"
@@ -39,7 +62,10 @@ class AccountPage(Adw.NavigationPage):
         self._manager = account_manager
         self._build_ui()
 
+    # -- UI construction -----------------------------------------------------
+
     def _build_ui(self) -> None:
+        """Build the toolbar view, empty state, and account list."""
         toolbar_view = Adw.ToolbarView()
 
         header = Adw.HeaderBar()
@@ -54,7 +80,6 @@ class AccountPage(Adw.NavigationPage):
         header.pack_end(menu_button)
         toolbar_view.add_top_bar(header)
 
-        # Content: either account list or empty state
         self._content_stack = Gtk.Stack()
         self._content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
 
@@ -68,7 +93,13 @@ class AccountPage(Adw.NavigationPage):
 
         # Account list
         scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
-        clamp = Adw.Clamp(maximum_size=600, margin_top=24, margin_bottom=24, margin_start=12, margin_end=12)
+        clamp = Adw.Clamp(
+            maximum_size=600,
+            margin_top=24,
+            margin_bottom=24,
+            margin_start=12,
+            margin_end=12,
+        )
 
         self._list_group = Adw.PreferencesGroup(title="Select Account")
         self._listbox = Gtk.ListBox(
@@ -87,12 +118,19 @@ class AccountPage(Adw.NavigationPage):
         self.refresh_accounts()
 
     def _build_menu(self) -> Gio.Menu:
+        """Build the primary hamburger menu for the account page."""
         menu = Gio.Menu()
         menu.append("About Trackma", "app.about")
         return menu
 
+    # -- Public interface ----------------------------------------------------
+
     def refresh_accounts(self) -> None:
-        """Reload account list from AccountManager."""
+        """Reload the account list from the ``AccountManager``.
+
+        Switches between the empty-state and the list view depending
+        on whether any accounts exist.
+        """
         # Clear existing rows
         while True:
             row = self._listbox.get_row_at_index(0)
@@ -107,47 +145,61 @@ class AccountPage(Adw.NavigationPage):
 
         self._content_stack.set_visible_child_name("list")
         for num, account in accounts:
-            api_key = account["api"]
-            lib_info = utils.available_libs.get(api_key)
-            display_name = lib_info[0] if lib_info else api_key
+            self._add_account_row(num, account)
 
-            row = Adw.ActionRow(
-                title=GLib.markup_escape_text(account["username"]),
-                subtitle=display_name,
-                activatable=True,
-            )
-            row._account_num = num  # type: ignore[attr-defined]
+    # -- Row construction ----------------------------------------------------
 
-            edit_button = Gtk.Button(
-                icon_name="document-edit-symbolic",
-                valign=Gtk.Align.CENTER,
-                css_classes=["flat"],
-                tooltip_text="Edit",
-            )
-            edit_button._account_num = num  # type: ignore[attr-defined]
-            edit_button.connect("clicked", self._on_edit_clicked)
-            row.add_suffix(edit_button)
+    def _add_account_row(self, num: int, account: dict[str, Any]) -> None:
+        """Append a single account row to the list.
 
-            delete_button = Gtk.Button(
-                icon_name="user-trash-symbolic",
-                valign=Gtk.Align.CENTER,
-                css_classes=["flat"],
-                tooltip_text="Remove",
-            )
-            delete_button._account_num = num  # type: ignore[attr-defined]
-            delete_button._account_username = account["username"]  # type: ignore[attr-defined]
-            delete_button.connect("clicked", self._on_delete_clicked)
-            row.add_suffix(delete_button)
+        Args:
+            num: Account number used by ``AccountManager``.
+            account: Account dict with at least ``username`` and ``api`` keys.
+        """
+        api_key = account["api"]
+        lib_info = utils.available_libs.get(api_key)
+        display_name = lib_info[0] if lib_info else api_key
 
-            row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
-            self._listbox.append(row)
+        row = Adw.ActionRow(
+            title=GLib.markup_escape_text(account["username"]),
+            subtitle=display_name,
+            activatable=True,
+        )
+        row._account_num = num  # type: ignore[attr-defined]
+
+        edit_button = Gtk.Button(
+            icon_name="document-edit-symbolic",
+            valign=Gtk.Align.CENTER,
+            css_classes=["flat"],
+            tooltip_text="Edit",
+        )
+        edit_button._account_num = num  # type: ignore[attr-defined]
+        edit_button.connect("clicked", self._on_edit_clicked)
+        row.add_suffix(edit_button)
+
+        delete_button = Gtk.Button(
+            icon_name="user-trash-symbolic",
+            valign=Gtk.Align.CENTER,
+            css_classes=["flat"],
+            tooltip_text="Remove",
+        )
+        delete_button._account_num = num  # type: ignore[attr-defined]
+        delete_button._account_username = account["username"]  # type: ignore[attr-defined]
+        delete_button.connect("clicked", self._on_delete_clicked)
+        row.add_suffix(delete_button)
+
+        row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+        self._listbox.append(row)
+
+    # -- Signal handlers -----------------------------------------------------
 
     def _on_row_activated(self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
-        action_row = row
-        account_num: int = action_row._account_num  # type: ignore[attr-defined]
+        """Emit ``account-open`` with the activated row's account number."""
+        account_num: int = row._account_num  # type: ignore[attr-defined]
         self.emit("account-open", account_num)
 
     def _on_add_clicked(self, _button: Gtk.Button) -> None:
+        """Push the *Add Account* page onto the navigation view."""
         nav_view = self.get_parent()
         if not isinstance(nav_view, Adw.NavigationView):
             return
@@ -156,6 +208,7 @@ class AccountPage(Adw.NavigationPage):
         nav_view.push(add_page)
 
     def _on_edit_clicked(self, button: Gtk.Button) -> None:
+        """Push the *Edit Account* page for the clicked row."""
         account_num: int = button._account_num  # type: ignore[attr-defined]
         nav_view = self.get_parent()
         if not isinstance(nav_view, Adw.NavigationView):
@@ -165,6 +218,7 @@ class AccountPage(Adw.NavigationPage):
         nav_view.push(edit_page)
 
     def _on_delete_clicked(self, button: Gtk.Button) -> None:
+        """Show a confirmation dialog before deleting an account."""
         account_num: int = button._account_num  # type: ignore[attr-defined]
         username: str = button._account_username  # type: ignore[attr-defined]
 
@@ -181,21 +235,32 @@ class AccountPage(Adw.NavigationPage):
         dialog.present(self.get_root())
 
     def _on_delete_response(
-        self, dialog: Adw.AlertDialog, response: str, account_num: int
+        self, _dialog: Adw.AlertDialog, response: str, account_num: int
     ) -> None:
+        """Delete the account if the user confirmed removal."""
         if response == "remove":
             self._manager.delete_account(account_num)
             self.refresh_accounts()
 
     def _on_account_added(self, _page: AddAccountPage) -> None:
+        """Refresh the list after a new account is added."""
         self.refresh_accounts()
 
 
 class AddAccountPage(Adw.NavigationPage):
     """Page for adding a new account.
 
+    Presents an API selector (``AdwComboRow``) and credential fields
+    whose labels adapt to the selected service's authentication type.
+    For OAuth services a *Request PIN* button opens the authorization
+    URL in the default browser via ``Gtk.UriLauncher``.
+
+    Args:
+        account_manager: The shared ``AccountManager`` instance.
+        **kwargs: Forwarded to ``Adw.NavigationPage``.
+
     Signals:
-        account-added(): Emitted after an account is successfully added.
+        account-added(): Emitted after the account is persisted.
     """
 
     __gtype_name__ = "TrackmaAddAccountPage"
@@ -210,7 +275,10 @@ class AddAccountPage(Adw.NavigationPage):
         self._oauth_pin_requested = False
         self._build_ui()
 
+    # -- UI construction -----------------------------------------------------
+
     def _build_ui(self) -> None:
+        """Build the form: API combo, username/password rows, PIN button."""
         toolbar_view = Adw.ToolbarView()
 
         header = Adw.HeaderBar()
@@ -224,11 +292,17 @@ class AddAccountPage(Adw.NavigationPage):
         toolbar_view.add_top_bar(header)
 
         scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
-        clamp = Adw.Clamp(maximum_size=600, margin_top=24, margin_bottom=24, margin_start=12, margin_end=12)
+        clamp = Adw.Clamp(
+            maximum_size=600,
+            margin_top=24,
+            margin_bottom=24,
+            margin_start=12,
+            margin_end=12,
+        )
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
 
-        # API selector group
+        # API selector
         api_group = Adw.PreferencesGroup(title="Service")
         self._api_names: list[str] = list(utils.available_libs.keys())
         string_list = Gtk.StringList()
@@ -240,7 +314,7 @@ class AddAccountPage(Adw.NavigationPage):
         api_group.add(self._api_row)
         content.append(api_group)
 
-        # Credentials group
+        # Credential fields
         self._creds_group = Adw.PreferencesGroup(title="Credentials")
 
         self._username_row = Adw.EntryRow(title="Username")
@@ -268,18 +342,41 @@ class AddAccountPage(Adw.NavigationPage):
         toolbar_view.set_content(scroll)
         self.set_child(toolbar_view)
 
-        # Trigger initial state
+        # Set initial field labels based on the default selection
         self._on_api_changed(self._api_row, None)
 
+    # -- Helpers -------------------------------------------------------------
+
     def _get_selected_api(self) -> str:
+        """Return the ``available_libs`` key for the currently selected API."""
         idx = self._api_row.get_selected()
         return self._api_names[idx]
 
     def _get_login_type(self) -> utils.Login:
+        """Return the ``Login`` enum for the currently selected API."""
         api = self._get_selected_api()
         return utils.available_libs[api][2]
 
+    def _update_confirm_sensitivity(self) -> None:
+        """Enable the *Add* button only when all required fields are filled.
+
+        For OAuth APIs the PIN must also have been requested first.
+        """
+        username = self._username_row.get_text().strip()
+        password = self._password_row.get_text().strip()
+        login_type = self._get_login_type()
+
+        has_fields = bool(username) and bool(password)
+
+        if login_type in (utils.Login.OAUTH, utils.Login.OAUTH_PKCE):
+            self._confirm_button.set_sensitive(has_fields and self._oauth_pin_requested)
+        else:
+            self._confirm_button.set_sensitive(has_fields)
+
+    # -- Signal handlers -----------------------------------------------------
+
     def _on_api_changed(self, _row: Adw.ComboRow, _pspec: Any) -> None:
+        """Adapt field labels and button visibility to the selected API."""
         login_type = self._get_login_type()
         self._adding_extra = {}
         self._oauth_pin_requested = False
@@ -299,8 +396,13 @@ class AddAccountPage(Adw.NavigationPage):
         self._update_confirm_sensitivity()
 
     def _on_pin_request(self, _button: Gtk.Button) -> None:
+        """Open the provider's authorization URL in the default browser.
+
+        For OAUTH_PKCE APIs a ``code_verifier`` is generated and stored
+        in ``_adding_extra`` so it can be passed to ``add_account`` later.
+        """
         api = self._get_selected_api()
-        auth_url = utils.available_libs[api][3]
+        auth_url: str = utils.available_libs[api][3]
 
         if utils.available_libs[api][2] == utils.Login.OAUTH_PKCE:
             code_verifier = utils.oauth_generate_pkce()
@@ -311,25 +413,14 @@ class AddAccountPage(Adw.NavigationPage):
         self._update_confirm_sensitivity()
 
         launcher = Gtk.UriLauncher(uri=auth_url)
-        window = self.get_root()
-        launcher.launch(window, None, None)
+        launcher.launch(self.get_root(), None, None)
 
     def _on_fields_changed(self, _row: Adw.EntryRow) -> None:
+        """Re-evaluate the *Add* button state when input changes."""
         self._update_confirm_sensitivity()
 
-    def _update_confirm_sensitivity(self) -> None:
-        username = self._username_row.get_text().strip()
-        password = self._password_row.get_text().strip()
-        login_type = self._get_login_type()
-
-        has_fields = bool(username) and bool(password)
-
-        if login_type in (utils.Login.OAUTH, utils.Login.OAUTH_PKCE):
-            self._confirm_button.set_sensitive(has_fields and self._oauth_pin_requested)
-        else:
-            self._confirm_button.set_sensitive(has_fields)
-
     def _on_confirm(self, _button: Gtk.Button) -> None:
+        """Persist the new account and pop back to the account list."""
         api = self._get_selected_api()
         username = self._username_row.get_text().strip()
         password = self._password_row.get_text().strip()
@@ -350,8 +441,17 @@ class AddAccountPage(Adw.NavigationPage):
 class EditAccountPage(Adw.NavigationPage):
     """Page for editing an existing account's credentials.
 
+    The service (API) is shown as a read-only row.  The username and
+    password/PIN fields are pre-populated and editable.  For OAuth
+    services a *Request PIN* button is available to re-authorize.
+
+    Args:
+        account_manager: The shared ``AccountManager`` instance.
+        account_num: The account number to edit.
+        **kwargs: Forwarded to ``Adw.NavigationPage``.
+
     Signals:
-        account-edited(): Emitted after the account is successfully updated.
+        account-edited(): Emitted after the account is persisted.
     """
 
     __gtype_name__ = "TrackmaEditAccountPage"
@@ -366,13 +466,16 @@ class EditAccountPage(Adw.NavigationPage):
         self._manager = account_manager
         self._account_num = account_num
         self._account = account_manager.get_account(account_num)
-        self._api_key = self._account["api"]
-        self._login_type = utils.available_libs[self._api_key][2]
+        self._api_key: str = self._account["api"]
+        self._login_type: utils.Login = utils.available_libs[self._api_key][2]
         self._adding_extra: dict[str, str] = {}
         self._oauth_pin_requested = False
         self._build_ui()
 
+    # -- UI construction -----------------------------------------------------
+
     def _build_ui(self) -> None:
+        """Build the form: read-only service info and editable credentials."""
         toolbar_view = Adw.ToolbarView()
 
         header = Adw.HeaderBar()
@@ -387,20 +490,23 @@ class EditAccountPage(Adw.NavigationPage):
 
         scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
         clamp = Adw.Clamp(
-            maximum_size=600, margin_top=24, margin_bottom=24, margin_start=12, margin_end=12
+            maximum_size=600,
+            margin_top=24,
+            margin_bottom=24,
+            margin_start=12,
+            margin_end=12,
         )
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
 
-        # Info group (read-only)
+        # Read-only service info
         info_group = Adw.PreferencesGroup(title="Account")
         lib_info = utils.available_libs.get(self._api_key)
         display_name = lib_info[0] if lib_info else self._api_key
         info_group.add(Adw.ActionRow(title="Service", subtitle=display_name))
         content.append(info_group)
 
-        # Credentials group
+        # Editable credentials
         creds_group = Adw.PreferencesGroup(title="Credentials")
-
         is_oauth = self._login_type in (utils.Login.OAUTH, utils.Login.OAUTH_PKCE)
 
         self._username_row = Adw.EntryRow(
@@ -433,8 +539,28 @@ class EditAccountPage(Adw.NavigationPage):
         toolbar_view.set_content(scroll)
         self.set_child(toolbar_view)
 
+    # -- Helpers -------------------------------------------------------------
+
+    def _update_save_sensitivity(self) -> None:
+        """Enable the *Save* button only when all required fields are filled.
+
+        For OAuth APIs the PIN must also have been re-requested first.
+        """
+        username = self._username_row.get_text().strip()
+        password = self._password_row.get_text().strip()
+        has_fields = bool(username) and bool(password)
+
+        is_oauth = self._login_type in (utils.Login.OAUTH, utils.Login.OAUTH_PKCE)
+        if is_oauth:
+            self._save_button.set_sensitive(has_fields and self._oauth_pin_requested)
+        else:
+            self._save_button.set_sensitive(has_fields)
+
+    # -- Signal handlers -----------------------------------------------------
+
     def _on_pin_request(self, _button: Gtk.Button) -> None:
-        auth_url = utils.available_libs[self._api_key][3]
+        """Open the provider's authorization URL for re-authorization."""
+        auth_url: str = utils.available_libs[self._api_key][3]
 
         if self._login_type == utils.Login.OAUTH_PKCE:
             code_verifier = utils.oauth_generate_pkce()
@@ -448,20 +574,11 @@ class EditAccountPage(Adw.NavigationPage):
         launcher.launch(self.get_root(), None, None)
 
     def _on_fields_changed(self, _row: Adw.EntryRow) -> None:
+        """Re-evaluate the *Save* button state when input changes."""
         self._update_save_sensitivity()
 
-    def _update_save_sensitivity(self) -> None:
-        username = self._username_row.get_text().strip()
-        password = self._password_row.get_text().strip()
-        has_fields = bool(username) and bool(password)
-
-        is_oauth = self._login_type in (utils.Login.OAUTH, utils.Login.OAUTH_PKCE)
-        if is_oauth:
-            self._save_button.set_sensitive(has_fields and self._oauth_pin_requested)
-        else:
-            self._save_button.set_sensitive(has_fields)
-
     def _on_save(self, _button: Gtk.Button) -> None:
+        """Persist the edited account and pop back to the account list."""
         username = self._username_row.get_text().strip()
         password = self._password_row.get_text().strip()
         extra = self._adding_extra if self._adding_extra else self._account.get("extra", {})

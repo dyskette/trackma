@@ -1,9 +1,18 @@
 """
 Trackma GTK4 Main Window.
 
-Primary application window using libadwaita. Uses AdwNavigationView to flow
-from account selection to the show list. Communicates exclusively through
-Engine methods.
+Primary application window using libadwaita. Uses an AdwNavigationView
+to flow from account selection to the show list. All interaction with
+the Trackma core happens exclusively through Engine methods.
+
+The window lifecycle is:
+
+1. On construction, the account page is shown.
+2. If a default account exists, engine startup begins immediately.
+3. On account selection, the engine is started in a background thread
+   while a loading page is displayed.
+4. Once the engine is ready, the navigation stack is replaced with
+   the (placeholder) library page.
 """
 
 from __future__ import annotations
@@ -28,7 +37,17 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(Adw.ApplicationWindow):
-    """Main application window."""
+    """Main application window.
+
+    Hosts an ``AdwNavigationView`` whose root page is the account
+    selector.  After the user picks an account the engine is created
+    on a background thread and, once ready, the navigation stack is
+    replaced with a placeholder library page.
+
+    Args:
+        application: The owning ``TrackmaApplication``.
+        **kwargs: Forwarded to ``Adw.ApplicationWindow``.
+    """
 
     def __init__(self, application: TrackmaApplication, **kwargs: Any) -> None:
         super().__init__(application=application, **kwargs)
@@ -42,39 +61,58 @@ class MainWindow(Adw.ApplicationWindow):
         self._build_ui()
         self._try_default_account()
 
+    # -- UI construction -----------------------------------------------------
+
     def _build_ui(self) -> None:
-        """Construct the window UI."""
+        """Construct the widget tree: toast overlay → navigation view."""
         self._toast_overlay = Adw.ToastOverlay()
 
         self._nav_view = Adw.NavigationView()
         self._toast_overlay.set_child(self._nav_view)
 
-        # Account page
         self._account_page = AccountPage(self._app.account_manager)
         self._account_page.connect("account-open", self._on_account_open)
         self._nav_view.add(self._account_page)
 
         self.set_content(self._toast_overlay)
 
+    def _build_menu(self) -> Gio.Menu:
+        """Build the primary hamburger menu for the library page."""
+        menu = Gio.Menu()
+        menu.append("About Trackma", "app.about")
+        return menu
+
+    # -- Account selection ---------------------------------------------------
+
     def _try_default_account(self) -> None:
-        """If a default account exists, start the engine immediately."""
+        """Skip the account page when a default account is configured."""
         default = self._app.account_manager.get_default()
         if default is not None:
-            # Find the account number for the default
             for num, account in self._app.account_manager.get_accounts():
                 if account is default:
                     self._start_engine(num)
                     return
 
     def _on_account_open(self, _page: AccountPage, account_num: int) -> None:
+        """Handle the ``account-open`` signal from the account page."""
         self._app.account_manager.set_default(account_num)
         self._start_engine(account_num)
 
+    # -- Engine lifecycle ----------------------------------------------------
+
     def _start_engine(self, account_num: int) -> None:
-        """Start the engine in a background thread, showing a loading page."""
+        """Start the engine on a background thread.
+
+        Pushes a loading page with a spinner while the engine
+        connects.  On success the navigation stack is replaced with
+        the library page; on failure a toast is shown and the loading
+        page is popped.
+
+        Args:
+            account_num: Account number passed to ``AccountManager.get_account``.
+        """
         account = self._app.account_manager.get_account(account_num)
 
-        # Show loading page
         loading_page = Adw.NavigationPage(title="Loading")
         loading_toolbar = Adw.ToolbarView()
         loading_toolbar.add_top_bar(Adw.HeaderBar())
@@ -102,10 +140,16 @@ class MainWindow(Adw.ApplicationWindow):
         thread.start()
 
     def _on_engine_ready(self, engine: Engine) -> bool:
+        """Replace the loading page with the library page.
+
+        Called on the main thread via ``GLib.idle_add``.
+
+        Returns:
+            ``GLib.SOURCE_REMOVE`` so the idle callback is not repeated.
+        """
         self._engine = engine
         self._app._engine = engine
 
-        # Replace loading page with placeholder list page
         list_page = Adw.NavigationPage(title="Library")
         list_toolbar = Adw.ToolbarView()
 
@@ -139,11 +183,19 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_engine_error(self, message: str) -> bool:
+        """Pop the loading page and show an error toast.
+
+        Called on the main thread via ``GLib.idle_add``.
+
+        Returns:
+            ``GLib.SOURCE_REMOVE`` so the idle callback is not repeated.
+        """
         self._nav_view.pop()
         self.show_toast(f"Engine error: {message}", timeout=5)
         return GLib.SOURCE_REMOVE
 
     def _on_switch_account(self, _button: Gtk.Button) -> None:
+        """Unload the current engine and return to the account page."""
         if self._engine is not None:
             try:
                 self._engine.unload()
@@ -155,14 +207,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._account_page.refresh_accounts()
         self._nav_view.replace([self._account_page])
 
-    def _build_menu(self) -> Gio.Menu:
-        """Build the primary menu."""
-        menu = Gio.Menu()
-        menu.append("About Trackma", "app.about")
-        return menu
+    # -- Utilities -----------------------------------------------------------
 
     def show_toast(self, message: str, *, timeout: int = 3) -> None:
-        """Display a toast notification."""
+        """Display a transient toast notification.
+
+        Args:
+            message: Text shown in the toast.
+            timeout: Seconds before the toast auto-dismisses.
+        """
         toast = Adw.Toast.new(message)
         toast.set_timeout(timeout)
         self._toast_overlay.add_toast(toast)
