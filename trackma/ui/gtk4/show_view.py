@@ -153,7 +153,14 @@ class ShowListPage(Adw.NavigationPage):
         )
         accounts_btn.connect("clicked", lambda _b: self.emit("switch-account"))
         sidebar_header.pack_start(accounts_btn)
+
+        add_btn = Gtk.Button(
+            icon_name="list-add-symbolic",
+            tooltip_text="Search & Add Show",
+        )
+        add_btn.connect("clicked", self._on_add_clicked)
         sidebar_header.pack_end(self._build_menu_button())
+        sidebar_header.pack_end(add_btn)
 
         sidebar_toolbar.add_top_bar(sidebar_header)
 
@@ -526,6 +533,20 @@ class ShowListPage(Adw.NavigationPage):
             self._string_filter.set_search(query)
         else:
             self._string_filter.set_search("")
+
+    # -- Add show --------------------------------------------------------------
+
+    def _on_add_clicked(self, _button: Gtk.Button) -> None:
+        """Push a SearchPage onto the NavigationView."""
+        nav_view = self._find_nav_view()
+        if nav_view is None:
+            logger.warning("No AdwNavigationView found for search push")
+            return
+
+        from trackma.ui.gtk4.search import SearchPage
+
+        search_page = SearchPage(engine=self._engine)
+        nav_view.push(search_page)
 
     # -- Row activation --------------------------------------------------------
 

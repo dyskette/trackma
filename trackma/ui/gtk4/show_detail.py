@@ -86,6 +86,7 @@ class ShowDetailPage(Adw.NavigationPage):
         self._build_progress_group(box)
         self._build_dates_group(box)
         self._build_tags_group(box)
+        self._build_synopsis_group(box)
         self._build_details_group(box)
 
         clamp.set_child(box)
@@ -272,6 +273,12 @@ class ShowDetailPage(Adw.NavigationPage):
 
         parent.append(group)
 
+    def _build_synopsis_group(self, parent: Gtk.Box) -> None:
+        """Build the Synopsis preferences group, populated async."""
+        self._synopsis_group = Adw.PreferencesGroup(title="Synopsis")
+        self._synopsis_group.set_visible(False)
+        parent.append(self._synopsis_group)
+
     def _build_details_group(self, parent: Gtk.Box) -> None:
         """Build the read-only Details preferences group."""
         self._details_group = Adw.PreferencesGroup(title="Details")
@@ -305,7 +312,17 @@ class ShowDetailPage(Adw.NavigationPage):
         """Save score to the engine."""
         if self._applying:
             return
-        new_score = row.get_value()
+        raw_score = row.get_value()
+        # Round to score_step to avoid floating-point precision
+        # issues with the engine's Decimal modulo validation
+        score_step = self._mediainfo.get("score_step", 1)
+        if isinstance(score_step, int):
+            new_score = int(round(raw_score))
+        else:
+            # Snap to nearest step then round to the step's decimal places
+            step_str = str(score_step)
+            decimals = len(step_str.split(".")[1]) if "." in step_str else 0
+            new_score = round(round(raw_score / score_step) * score_step, decimals)
         if new_score == float(self._show.get("my_score", 0)):
             return
         try:
@@ -442,31 +459,55 @@ class ShowDetailPage(Adw.NavigationPage):
         thread.start()
 
     def _apply_details(self, details: dict[str, Any]) -> bool:
-        """Populate the Details group with extended metadata."""
+        """Populate the Synopsis and Details groups with extended metadata."""
         extra = details.get("extra", [])
+        synopsis_keys = {"Synopsis", "Description"}
+
         for label, value in extra:
             if value is None or value == "":
                 continue
+
             if isinstance(value, list):
-                value = ", ".join(str(v) for v in value)
-            text = str(value)
-            # Strip HTML tags and decode entities from API responses
-            # Convert HTML line breaks to plain text newlines:
-            # multiple <br> in sequence → paragraph break, single <br> → line break
-            paragraph_break = r"(<br\s*/?\s*>\s*){2,}"
-            single_line_break = r"<br\s*/?\s*>"
-            any_html_tag = r"<[^>]+>"
-            text = re.sub(paragraph_break, "\n\n", text)
-            text = re.sub(single_line_break, "\n", text)
-            text = re.sub(any_html_tag, "", text)
-            text = html.unescape(text)
-            row = Adw.ActionRow()
-            row.set_use_markup(False)
-            row.set_title(str(label))
-            row.set_subtitle(text)
-            row.set_subtitle_lines(5)
-            self._details_group.add(row)
+                value = ", ".join(str(v) for v in value if v)
+                if not value:
+                    continue
+
+            text = self._clean_html(str(value))
+            if not text:
+                continue
+
+            if label in synopsis_keys:
+                # Show as a wrapping label in the synopsis group
+                synopsis_label = Gtk.Label(
+                    label=text,
+                    xalign=0,
+                    wrap=True,
+                    selectable=True,
+                )
+                synopsis_label.add_css_class("body")
+                synopsis_label.set_margin_start(12)
+                synopsis_label.set_margin_end(12)
+                synopsis_label.set_margin_top(8)
+                synopsis_label.set_margin_bottom(8)
+                self._synopsis_group.add(synopsis_label)
+                self._synopsis_group.set_visible(True)
+            else:
+                row = Adw.ActionRow()
+                row.set_use_markup(False)
+                row.set_title(str(label))
+                row.set_subtitle(text)
+                row.set_subtitle_lines(5)
+                self._details_group.add(row)
+
         return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def _clean_html(text: str) -> str:
+        """Strip HTML tags and decode entities from API text."""
+        text = re.sub(r"(<br\s*/?\s*>\s*){2,}", "\n\n", text)
+        text = re.sub(r"<br\s*/?\s*>", "\n", text)
+        text = re.sub(r"<[^>]+>", "", text)
+        return html.unescape(text).strip()
 
     # -- Utilities -------------------------------------------------------------
 
