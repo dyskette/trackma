@@ -1,10 +1,14 @@
 """
 Trackma GTK4 Show List View.
 
-Displays the user's anime/manga list organized by status using an
-AdwNavigationSplitView sidebar. The sidebar lists statuses; the content
-area shows a GtkListView for the selected status, backed by a chain of
-Gio.ListStore -> SortListModel -> FilterListModel -> SingleSelection.
+Displays the user's anime/manga list as a flat list with status filtering
+via a MenuButton in the header bar. The filter chain is:
+
+    Gio.ListStore (all shows)
+      → Gtk.FilterListModel (status filter)
+        → Gtk.SortListModel (alphabetical)
+          → Gtk.FilterListModel (search string)
+            → Gtk.SingleSelection
 
 All interaction with the Trackma core happens exclusively through
 Engine methods. Engine signals are marshaled to the main thread via
@@ -22,12 +26,10 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
-    from trackma.ui.gtk4.show_detail import ShowDetailPage
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +87,11 @@ class ShowObject(GObject.Object):
 
 
 class ShowListPage(Adw.NavigationPage):
-    """Navigation page displaying the show list with a status sidebar.
+    """Navigation page displaying the show list with status filtering.
 
-    Uses an ``AdwNavigationSplitView`` with a sidebar listing statuses
-    and a content area showing shows for the selected status.
+    Shows all items in a ``GtkListBox`` with ``Adw.ActionRow`` rows,
+    styled as a boxed list inside an ``AdwClamp``. A ``MenuButton``
+    in the header bar provides status filtering.
 
     Signals:
         switch-account: Emitted when the user clicks the Switch Account button.
@@ -108,15 +111,11 @@ class ShowListPage(Adw.NavigationPage):
         self._engine = engine
         self._mediainfo: dict[str, Any] = engine.mediainfo
         self._statuses: dict[str | int, str] = self._mediainfo["statuses_dict"]
-        self._stores: dict[str | int, Gio.ListStore] = {}
         self._current_status: str | int | None = None
 
         self._build_ui()
-        self._populate_stores()
+        self._populate_store()
         self._connect_engine_signals()
-
-        # Select first status
-        self._sidebar_list.select_row(self._sidebar_list.get_row_at_index(0))
 
     # -- UI construction -------------------------------------------------------
 
@@ -125,106 +124,74 @@ class ShowListPage(Adw.NavigationPage):
 
         Layout::
 
-            AdwNavigationSplitView
-            ├── sidebar: AdwNavigationPage
-            │   └── AdwToolbarView
-            │       ├── [top] AdwHeaderBar (accounts btn, hamburger menu)
-            │       └── [content] GtkListBox (.navigation-sidebar)
-            └── content: AdwNavigationPage
-                └── AdwToolbarView
-                    ├── [top] AdwHeaderBar (search toggle)
-                    ├── [top] GtkSearchBar
-                    └── [content] GtkStack (list | empty status page)
-
-        The split view collapses automatically on narrow windows,
-        turning the sidebar into a pushed navigation page with a
-        back button.
+            AdwToolbarView
+            ├── [top] AdwHeaderBar
+            │   ├── [start] accounts_btn
+            │   ├── [end] menu_btn (hamburger)
+            │   ├── [end] add_btn
+            │   ├── [end] filter_btn (status filter)
+            │   └── [end] search_btn
+            ├── [top] GtkSearchBar
+            └── [content] GtkStack (list | empty)
         """
-        self._split_view = Adw.NavigationSplitView()
+        toolbar = Adw.ToolbarView()
 
-        # -- Sidebar -----------------------------------------------------------
-        sidebar_toolbar = Adw.ToolbarView()
-
-        sidebar_header = Adw.HeaderBar()
-        sidebar_header.set_title_widget(Adw.WindowTitle(title="Trackma"))
+        header = Adw.HeaderBar()
+        self._header_title = Adw.WindowTitle(title="Library", subtitle="")
+        header.set_title_widget(self._header_title)
 
         accounts_btn = Gtk.Button(
             icon_name="system-users-symbolic",
             tooltip_text="Switch Account",
         )
         accounts_btn.connect("clicked", lambda _b: self.emit("switch-account"))
-        sidebar_header.pack_start(accounts_btn)
+        header.pack_start(accounts_btn)
+
+        header.pack_end(self._build_menu_button())
 
         add_btn = Gtk.Button(
             icon_name="list-add-symbolic",
             tooltip_text="Search & Add Show",
         )
         add_btn.connect("clicked", self._on_add_clicked)
-        sidebar_header.pack_end(self._build_menu_button())
-        sidebar_header.pack_end(add_btn)
+        header.pack_end(add_btn)
 
-        sidebar_toolbar.add_top_bar(sidebar_header)
-
-        self._sidebar_list = Gtk.ListBox()
-        self._sidebar_list.add_css_class("navigation-sidebar")
-        self._sidebar_list.connect("row-selected", self._on_sidebar_row_selected)
-
-        self._status_keys: list[str | int] = []
-        for status_num, status_name in self._statuses.items():
-            row = Gtk.ListBoxRow()
-            label = Gtk.Label(
-                label=status_name,
-                xalign=0,
-            )
-            label.set_margin_start(8)
-            label.set_margin_end(8)
-            label.set_margin_top(8)
-            label.set_margin_bottom(8)
-            row.set_child(label)
-            self._sidebar_list.append(row)
-            self._status_keys.append(status_num)
-
-        sidebar_toolbar.set_content(self._sidebar_list)
-
-        sidebar_page = Adw.NavigationPage(title="Library")
-        sidebar_page.set_child(sidebar_toolbar)
-
-        # -- Content -----------------------------------------------------------
-        content_toolbar = Adw.ToolbarView()
-
-        self._content_header = Adw.HeaderBar()
-        self._content_title = Adw.WindowTitle(title="", subtitle="")
-        self._content_header.set_title_widget(self._content_title)
-
-        self._search_btn = Gtk.ToggleButton(
+        self._search_btn = Adw.SplitButton(
             icon_name="edit-find-symbolic",
             tooltip_text="Search",
+            menu_model=self._build_filter_menu(),
         )
-        self._content_header.pack_end(self._search_btn)
+        self._search_btn.connect("clicked", self._on_search_btn_clicked)
+        header.pack_end(self._search_btn)
 
-        content_toolbar.add_top_bar(self._content_header)
+        toolbar.add_top_bar(header)
 
         # Search bar
         self._search_entry = Gtk.SearchEntry(
             placeholder_text="Search shows...",
             hexpand=True,
         )
-        self._search_bar = Gtk.SearchBar(child=self._search_entry)
+        search_clamp = Adw.Clamp(maximum_size=600, child=self._search_entry)
+        self._search_bar = Gtk.SearchBar(child=search_clamp)
         self._search_bar.connect_entry(self._search_entry)
-        self._search_btn.bind_property(
-            "active", self._search_bar, "search-mode-enabled",
-            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
+        self._search_bar.connect(
+            "notify::search-mode-enabled", self._on_search_mode_changed,
         )
         self._search_entry.connect("search-changed", self._on_search_changed)
-        content_toolbar.add_top_bar(self._search_bar)
+        toolbar.add_top_bar(self._search_bar)
 
-        # Shared list view + empty state
-        self._content_store = Gio.ListStore(item_type=ShowObject)
+        # Data model: store → status filter → sort → search filter
+        self._store = Gio.ListStore(item_type=ShowObject)
+
+        self._status_filter = Gtk.CustomFilter.new(self._status_filter_func)
+        status_filter_model = Gtk.FilterListModel(
+            model=self._store, filter=self._status_filter,
+        )
 
         sorter = Gtk.StringSorter(
             expression=Gtk.PropertyExpression.new(ShowObject, None, "title"),
         )
-        sort_model = Gtk.SortListModel(model=self._content_store, sorter=sorter)
+        sort_model = Gtk.SortListModel(model=status_filter_model, sorter=sorter)
 
         self._string_filter = Gtk.StringFilter(
             expression=Gtk.PropertyExpression.new(ShowObject, None, "title"),
@@ -235,25 +202,24 @@ class ShowListPage(Adw.NavigationPage):
             model=sort_model, filter=self._string_filter,
         )
 
-        selection = Gtk.SingleSelection(model=self._filter_model, autoselect=False)
-
-        factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self._on_row_setup)
-        factory.connect("bind", self._on_row_bind)
-        factory.connect("unbind", self._on_row_unbind)
-
-        self._list_view = Gtk.ListView(
-            model=selection,
-            factory=factory,
-            single_click_activate=True,
-        )
-        self._list_view.connect("activate", self._on_row_activated)
-
-        self._scrolled = Gtk.ScrolledWindow(
-            hscrollbar_policy=Gtk.PolicyType.NEVER,
+        # List content
+        scroll = Gtk.ScrolledWindow(
             vexpand=True,
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
         )
-        self._scrolled.set_child(self._list_view)
+        clamp = Adw.Clamp(maximum_size=600)
+        clamp.set_margin_top(24)
+        clamp.set_margin_bottom(24)
+        clamp.set_margin_start(12)
+        clamp.set_margin_end(12)
+
+        self._list_group = Adw.PreferencesGroup()
+        self._listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self._listbox.add_css_class("boxed-list")
+        self._listbox.connect("row-activated", self._on_row_activated)
+        self._list_group.add(self._listbox)
+        clamp.set_child(self._list_group)
+        scroll.set_child(clamp)
 
         self._empty_page = Adw.StatusPage(
             icon_name="view-list-symbolic",
@@ -262,21 +228,17 @@ class ShowListPage(Adw.NavigationPage):
         )
 
         self._content_stack = Gtk.Stack()
-        self._content_stack.add_named(self._scrolled, "list")
+        self._content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self._content_stack.add_named(scroll, "list")
         self._content_stack.add_named(self._empty_page, "empty")
 
-        self._filter_model.connect("items-changed", self._update_empty_state)
+        self._filter_signal_id = self._filter_model.connect(
+            "items-changed", self._on_filter_items_changed,
+        )
 
-        content_toolbar.set_content(self._content_stack)
+        toolbar.set_content(self._content_stack)
 
-        self._content_page = Adw.NavigationPage(title="Shows")
-        self._content_page.set_child(content_toolbar)
-
-        # -- Assemble split view -----------------------------------------------
-        self._split_view.set_sidebar(sidebar_page)
-        self._split_view.set_content(self._content_page)
-
-        self.set_child(self._split_view)
+        self.set_child(toolbar)
 
         # Key capture for search
         self._search_bar.set_key_capture_widget(self)
@@ -302,8 +264,28 @@ class ShowListPage(Adw.NavigationPage):
             menu_model=menu,
         )
 
+    def _build_filter_menu(self) -> Gio.Menu:
+        """Build the status filter menu model for the split button dropdown."""
+        menu = Gio.Menu()
+        menu.append("All", "page.filter-status::all")
+        for status_num, status_name in self._statuses.items():
+            menu.append(status_name, f"page.filter-status::{status_num}")
+        return menu
+
+    def _on_search_btn_clicked(self, _button: Adw.SplitButton) -> None:
+        """Toggle the search bar when the split button is clicked."""
+        enabled = self._search_bar.get_search_mode()
+        self._search_bar.set_search_mode(not enabled)
+
+    def _on_search_mode_changed(
+        self, search_bar: Gtk.SearchBar, _pspec: GObject.ParamSpec,
+    ) -> None:
+        """Focus the search entry when search mode is enabled."""
+        if search_bar.get_search_mode():
+            self._search_entry.grab_focus()
+
     def _setup_actions(self) -> None:
-        """Register page-level actions for download and upload."""
+        """Register page-level actions."""
         group = Gio.SimpleActionGroup()
 
         download_action = Gio.SimpleAction.new("download", None)
@@ -314,216 +296,134 @@ class ShowListPage(Adw.NavigationPage):
         upload_action.connect("activate", self._on_upload)
         group.add_action(upload_action)
 
+        filter_action = Gio.SimpleAction.new_stateful(
+            "filter-status",
+            GLib.VariantType.new("s"),
+            GLib.Variant.new_string("all"),
+        )
+        filter_action.connect("change-state", self._on_filter_status_changed)
+        group.add_action(filter_action)
+
         self.insert_action_group("page", group)
 
-    # -- Sidebar selection -----------------------------------------------------
+    # -- Status filter ---------------------------------------------------------
 
-    def _on_sidebar_row_selected(
-        self, listbox: Gtk.ListBox, row: Gtk.ListBoxRow | None,
+    def _status_filter_func(self, item: ShowObject) -> bool:
+        """Return True if *item* passes the current status filter."""
+        if self._current_status is None:
+            return True
+        return item.status == str(self._current_status)
+
+    def _on_filter_status_changed(
+        self, action: Gio.SimpleAction, value: GLib.Variant,
     ) -> None:
-        """Handle sidebar status selection.
+        """Handle status filter menu selection."""
+        action.set_state(value)
+        choice = value.get_string()
 
-        Swaps the content store to show items for the newly selected
-        status.  On collapsed layouts, navigates forward to the content
-        page automatically.
+        if choice == "all":
+            self._current_status = None
+            self._header_title.set_title("Library")
+            self._empty_page.set_description("")
+        else:
+            self._current_status = choice
+            status_name = self._statuses.get(
+                int(choice) if choice.lstrip("-").isdigit() else choice, choice,
+            )
+            self._header_title.set_title(f"Library \u2014 {status_name}")
+            self._empty_page.set_description(
+                f"No shows with status \u201c{status_name}\u201d"
+            )
 
-        Args:
-            listbox: The sidebar ``GtkListBox``.
-            row: The selected row, or ``None`` if deselected.
-        """
-        if row is None:
-            return
-
-        index = row.get_index()
-        if index < 0 or index >= len(self._status_keys):
-            return
-
-        status_num = self._status_keys[index]
-        self._current_status = status_num
-        status_name = self._statuses[status_num]
-
-        self._content_title.set_title(status_name)
-        self._content_page.set_title(status_name)
-        self._empty_page.set_description(
-            f"No shows with status \u201c{status_name}\u201d"
-        )
-
-        # Swap content store items
-        self._content_store.remove_all()
-        if status_num in self._stores:
-            store = self._stores[status_num]
-            for i in range(store.get_n_items()):
-                item = store.get_item(i)
-                if item is not None:
-                    self._content_store.append(item)
-
-        self._update_empty_state()
+        self._status_filter.changed(Gtk.FilterChange.DIFFERENT)
         self._scroll_to_top()
-
-        # On collapsed layout, show the content page
-        if self._split_view.get_collapsed():
-            self._split_view.set_show_content(True)
 
     def _scroll_to_top(self) -> None:
         """Scroll the list view back to the top after layout settles."""
-        GLib.idle_add(self._do_scroll_to_top)
+        adj = self._listbox.get_adjustment()
+        if adj is not None:
+            adj.set_value(0)
 
-    def _do_scroll_to_top(self) -> bool:
-        """Set scroll position to top."""
-        self._scrolled.get_vadjustment().set_value(0)
-        return GLib.SOURCE_REMOVE
+    def _on_filter_items_changed(self, *_args: Any) -> None:
+        """Rebuild the listbox rows from the filter model."""
+        self._rebuild_listbox()
 
-    def _update_empty_state(self, *_args: Any) -> None:
-        """Toggle between the list view and the empty status page."""
-        if self._filter_model.get_n_items() == 0:
+    def _rebuild_listbox(self) -> None:
+        """Clear and repopulate the listbox from the filter model."""
+        # Remove all existing rows
+        while True:
+            row = self._listbox.get_row_at_index(0)
+            if row is None:
+                break
+            self._listbox.remove(row)
+
+        n = self._filter_model.get_n_items()
+        for i in range(n):
+            show = self._filter_model.get_item(i)
+            if isinstance(show, ShowObject):
+                self._listbox.append(self._create_show_row(show))
+
+        if n == 0:
             self._content_stack.set_visible_child_name("empty")
         else:
             self._content_stack.set_visible_child_name("list")
 
-    # -- Row factory -----------------------------------------------------------
+    # -- Row construction ------------------------------------------------------
 
-    def _on_row_setup(
-        self,
-        _factory: Gtk.SignalListItemFactory,
-        list_item: Gtk.ListItem,
-    ) -> None:
-        """Create the widget structure for a single show row.
-
-        Called once per visible row slot.  The box and its child labels
-        are reused across different items via bind/unbind.
-        """
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-
-        title_label = Gtk.Label(
-            xalign=0,
-            hexpand=True,
-            ellipsize=Pango.EllipsizeMode.END,  # Pango.EllipsizeMode.END
-        )
-        title_label.add_css_class("body")
-
-        progress_label = Gtk.Label(xalign=1)
-        progress_label.add_css_class("dim-label")
-
-        score_label = Gtk.Label(xalign=1)
-        score_label.add_css_class("dim-label")
-
-        box.append(title_label)
-        box.append(progress_label)
-        box.append(score_label)
-
-        # Stash references for bind/unbind
-        box._title_label = title_label  # type: ignore[attr-defined]
-        box._progress_label = progress_label  # type: ignore[attr-defined]
-        box._score_label = score_label  # type: ignore[attr-defined]
-        box._bindings = []  # type: ignore[attr-defined]
-
-        list_item.set_child(box)
-
-    def _on_row_bind(
-        self,
-        _factory: Gtk.SignalListItemFactory,
-        list_item: Gtk.ListItem,
-    ) -> None:
-        """Bind a ``ShowObject`` to the row widgets.
-
-        Sets label text and connects ``notify`` handlers so the row
-        updates live when properties change.
-        """
-        box = list_item.get_child()
-        show: ShowObject = list_item.get_item()  # type: ignore[assignment]
-
-        box._title_label.set_text(show.title)  # type: ignore[union-attr]
-
-        # Format progress
+    def _format_subtitle(self, show: ShowObject) -> str:
+        """Build subtitle text from progress and score."""
         if show.total > 0:
-            box._progress_label.set_text(f"{show.progress}/{show.total}")  # type: ignore[union-attr]
+            parts = [f"{show.progress}/{show.total}"]
         else:
-            box._progress_label.set_text(f"{show.progress}/?")  # type: ignore[union-attr]
+            parts = [f"{show.progress}/?"]
 
-        # Format score
         can_score = self._mediainfo.get("can_score", False)
         if can_score and show.score > 0:
             score_step = self._mediainfo.get("score_step", 1)
             if isinstance(score_step, float) and score_step != int(score_step):
-                box._score_label.set_text(f"\u2605 {show.score:.1f}")  # type: ignore[union-attr]
+                parts.append(f"\u2605 {show.score:.1f}")
             else:
-                box._score_label.set_text(f"\u2605 {int(show.score)}")  # type: ignore[union-attr]
-            box._score_label.set_visible(True)  # type: ignore[union-attr]
-        else:
-            box._score_label.set_visible(False)  # type: ignore[union-attr]
+                parts.append(f"\u2605 {int(show.score)}")
 
-        # Update on property changes
-        bindings = []
-        for prop in ("title", "progress", "total", "score"):
-            handler_id = show.connect(f"notify::{prop}", self._on_show_prop_changed, box)
-            bindings.append((show, handler_id))
-        box._bindings = bindings  # type: ignore[union-attr]
+        return " \u00b7 ".join(parts)
 
-    def _on_row_unbind(
-        self,
-        _factory: Gtk.SignalListItemFactory,
-        list_item: Gtk.ListItem,
-    ) -> None:
-        """Disconnect property-change handlers when the row is recycled."""
-        box = list_item.get_child()
-        for obj, handler_id in box._bindings:  # type: ignore[union-attr]
-            obj.disconnect(handler_id)
-        box._bindings = []  # type: ignore[union-attr]
+    def _create_show_row(self, show: ShowObject) -> Adw.ActionRow:
+        """Create an ActionRow for a show."""
+        row = Adw.ActionRow(
+            title=GLib.markup_escape_text(show.title),
+            subtitle=self._format_subtitle(show),
+            activatable=True,
+        )
+        row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+        row._show_obj = show  # type: ignore[attr-defined]
+
+        # Live-update on property changes
+        handler_id = show.connect("notify", self._on_show_prop_changed, row)
+        row._handler_id = handler_id  # type: ignore[attr-defined]
+
+        return row
 
     def _on_show_prop_changed(
         self,
         show: ShowObject,
         _pspec: GObject.ParamSpec,
-        box: Gtk.Box,
+        row: Adw.ActionRow,
     ) -> None:
         """Re-render row when a show property changes."""
-        box._title_label.set_text(show.title)  # type: ignore[attr-defined]
-        if show.total > 0:
-            box._progress_label.set_text(f"{show.progress}/{show.total}")  # type: ignore[attr-defined]
-        else:
-            box._progress_label.set_text(f"{show.progress}/?")  # type: ignore[attr-defined]
-
-        can_score = self._mediainfo.get("can_score", False)
-        if can_score and show.score > 0:
-            score_step = self._mediainfo.get("score_step", 1)
-            if isinstance(score_step, float) and score_step != int(score_step):
-                box._score_label.set_text(f"\u2605 {show.score:.1f}")  # type: ignore[attr-defined]
-            else:
-                box._score_label.set_text(f"\u2605 {int(show.score)}")  # type: ignore[attr-defined]
-            box._score_label.set_visible(True)  # type: ignore[attr-defined]
-        else:
-            box._score_label.set_visible(False)  # type: ignore[attr-defined]
+        row.set_title(GLib.markup_escape_text(show.title))
+        row.set_subtitle(self._format_subtitle(show))
 
     # -- Data population -------------------------------------------------------
 
-    def _populate_stores(self) -> None:
-        """Fill all status stores from the engine's current list."""
-        for status_num in self._statuses:
-            if status_num not in self._stores:
-                self._stores[status_num] = Gio.ListStore(item_type=ShowObject)
-            store = self._stores[status_num]
-            store.remove_all()
-            shows = self._engine.filter_list(status_num)
-            for show_data in shows:
-                store.append(ShowObject.from_dict(show_data))
-
-    def _refresh_content_view(self) -> None:
-        """Re-sync content store from the backing store for current status."""
-        if self._current_status is None:
-            return
-        self._content_store.remove_all()
-        if self._current_status in self._stores:
-            store = self._stores[self._current_status]
-            for i in range(store.get_n_items()):
-                item = store.get_item(i)
-                if item is not None:
-                    self._content_store.append(item)
-        self._update_empty_state()
-        self._scroll_to_top()
+    def _populate_store(self) -> None:
+        """Fill the store from the engine's full show list."""
+        # Block the items-changed handler to avoid O(n²) rebuilds
+        self._filter_model.handler_block(self._filter_signal_id)
+        self._store.remove_all()
+        for show_data in self._engine.get_list():
+            self._store.append(ShowObject.from_dict(show_data))
+        self._filter_model.handler_unblock(self._filter_signal_id)
+        self._rebuild_listbox()
 
     # -- Search ----------------------------------------------------------------
 
@@ -551,20 +451,11 @@ class ShowListPage(Adw.NavigationPage):
 
     # -- Row activation --------------------------------------------------------
 
-    def _on_row_activated(self, list_view: Gtk.ListView, position: int) -> None:
-        """Open the detail page for the activated show.
-
-        Finds the ``AdwNavigationView`` ancestor and pushes a
-        ``ShowDetailPage`` onto it.
-
-        Args:
-            list_view: The ``GtkListView``.
-            position: Index of the activated item in the selection model.
-        """
-        model = list_view.get_model()
-        if model is None:
-            return
-        show_obj: ShowObject | None = model.get_item(position)  # type: ignore[assignment]
+    def _on_row_activated(
+        self, listbox: Gtk.ListBox, row: Gtk.ListBoxRow,
+    ) -> None:
+        """Open the detail page for the activated show."""
+        show_obj: ShowObject | None = getattr(row, "_show_obj", None)
         if show_obj is None:
             return
 
@@ -572,7 +463,6 @@ class ShowListPage(Adw.NavigationPage):
         if not show_data:
             return
 
-        # Walk up to find the NavigationView
         nav_view = self._find_nav_view()
         if nav_view is None:
             logger.warning("No AdwNavigationView found for detail push")
@@ -602,27 +492,16 @@ class ShowListPage(Adw.NavigationPage):
         self._engine.connect_signal("show_added", self._on_show_added)
         self._engine.connect_signal("show_deleted", self._on_show_deleted)
 
-    def _find_show_object(
-        self, show_id: int, status: str | int | None = None,
-    ) -> tuple[Gio.ListStore, int, ShowObject] | None:
-        """Find a ShowObject by id across stores.
-
-        Args:
-            show_id: The show's id.
-            status: If given, only search in that status store.
+    def _find_show_object(self, show_id: int) -> tuple[int, ShowObject] | None:
+        """Find a ShowObject by id in the store.
 
         Returns:
-            Tuple of (store, position, show_object) or None.
+            Tuple of (position, show_object) or None.
         """
-        stores = (
-            [(status, self._stores[status])] if status is not None and status in self._stores
-            else self._stores.items()
-        )
-        for _status, store in stores:
-            for i in range(store.get_n_items()):
-                obj = store.get_item(i)
-                if isinstance(obj, ShowObject) and obj.show_id == show_id:
-                    return store, i, obj
+        for i in range(self._store.get_n_items()):
+            obj = self._store.get_item(i)
+            if isinstance(obj, ShowObject) and obj.show_id == show_id:
+                return i, obj
         return None
 
     def _on_episode_changed(self, show: dict[str, Any]) -> None:
@@ -637,32 +516,21 @@ class ShowListPage(Adw.NavigationPage):
         """Update a ``ShowObject`` in-place from fresh show data."""
         result = self._find_show_object(show.get("id", 0))
         if result is not None:
-            _store, _pos, obj = result
+            _pos, obj = result
             obj.update_from_dict(show)
         return GLib.SOURCE_REMOVE
 
     def _on_status_changed(self, show: dict[str, Any], old_status: str | int) -> None:
         """Engine callback for status changes; marshals to main thread."""
-        GLib.idle_add(self._handle_status_changed, show, old_status)
+        GLib.idle_add(self._handle_status_changed, show)
 
-    def _handle_status_changed(self, show: dict[str, Any], old_status: str | int) -> bool:
-        """Move a show between backing stores and refresh the content view."""
-        show_id = show.get("id", 0)
-        # Remove from old status store
-        result = self._find_show_object(show_id, old_status)
+    def _handle_status_changed(self, show: dict[str, Any]) -> bool:
+        """Update a show in-place; the status filter handles visibility."""
+        result = self._find_show_object(show.get("id", 0))
         if result is not None:
-            store, pos, _obj = result
-            store.remove(pos)
-
-        # Add to new status store
-        new_status = show.get("my_status", 0)
-        if new_status in self._stores:
-            self._stores[new_status].append(ShowObject.from_dict(show))
-
-        # Refresh content view if affected status is currently shown
-        if self._current_status in (old_status, new_status):
-            self._refresh_content_view()
-
+            _pos, obj = result
+            obj.update_from_dict(show)
+            self._status_filter.changed(Gtk.FilterChange.DIFFERENT)
         return GLib.SOURCE_REMOVE
 
     def _on_show_added(self, show: dict[str, Any]) -> None:
@@ -670,12 +538,8 @@ class ShowListPage(Adw.NavigationPage):
         GLib.idle_add(self._handle_show_added, show)
 
     def _handle_show_added(self, show: dict[str, Any]) -> bool:
-        """Append a new show to the appropriate backing store."""
-        status = show.get("my_status", 0)
-        if status in self._stores:
-            self._stores[status].append(ShowObject.from_dict(show))
-        if status == self._current_status:
-            self._refresh_content_view()
+        """Append a new show to the store."""
+        self._store.append(ShowObject.from_dict(show))
         return GLib.SOURCE_REMOVE
 
     def _on_show_deleted(self, show: dict[str, Any]) -> None:
@@ -683,13 +547,11 @@ class ShowListPage(Adw.NavigationPage):
         GLib.idle_add(self._handle_show_deleted, show)
 
     def _handle_show_deleted(self, show: dict[str, Any]) -> bool:
-        """Remove a show from its backing store and refresh the content view."""
+        """Remove a show from the store."""
         result = self._find_show_object(show.get("id", 0))
         if result is not None:
-            store, pos, _obj = result
-            store.remove(pos)
-            if self._current_status is not None:
-                self._refresh_content_view()
+            pos, _obj = result
+            self._store.remove(pos)
         return GLib.SOURCE_REMOVE
 
     # -- Sync actions ----------------------------------------------------------
@@ -711,9 +573,8 @@ class ShowListPage(Adw.NavigationPage):
             GLib.idle_add(self._show_toast, f"Download failed: {e}")
 
     def _on_download_complete(self) -> bool:
-        """Repopulate all stores after a successful download."""
-        self._populate_stores()
-        self._refresh_content_view()
+        """Repopulate the store after a successful download."""
+        self._populate_store()
         self._show_toast("List downloaded")
         return GLib.SOURCE_REMOVE
 
