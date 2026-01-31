@@ -125,7 +125,7 @@ class MainWindow(Adw.ApplicationWindow):
             try:
                 from trackma.engine import Engine
 
-                engine = Engine(account=account)
+                engine = Engine(account=account, message_handler=self._core_message_handler)
                 engine.start()
                 GLib.idle_add(self._on_engine_ready, engine)
             except Exception as e:
@@ -149,6 +149,18 @@ class MainWindow(Adw.ApplicationWindow):
         list_page.connect("switch-account", lambda _p: self._on_switch_account(None))
         self._nav_view.replace([list_page])
         return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def _core_message_handler(classname: str, msg_type: int, message: str) -> None:
+        """Forward Trackma core messages to Python logging."""
+        from trackma.messenger import TYPE_DEBUG, TYPE_WARN
+
+        if msg_type == TYPE_DEBUG:
+            logger.debug("[%s] %s", classname, message)
+        elif msg_type == TYPE_WARN:
+            logger.warning("[%s] %s", classname, message)
+        else:
+            logger.info("[%s] %s", classname, message)
 
     def _on_engine_error(self, message: str) -> bool:
         """Pop the loading page and show an error toast.

@@ -63,6 +63,7 @@ class SettingsDialog(Adw.PreferencesDialog):
         self._build_automation_page()
 
         self._load()
+        self._initial_tracker_config = self._snapshot_tracker_config()
 
         self.connect("closed", self._on_closed)
 
@@ -440,8 +441,86 @@ class SettingsDialog(Adw.PreferencesDialog):
         self._engine.save_config()
 
     def _on_closed(self, _dialog: Adw.PreferencesDialog) -> None:
-        """Save configuration when the dialog is closed."""
+        """Save configuration when the dialog is closed.
+
+        If tracker-related settings changed, the tracker is stopped and
+        restarted so the new configuration takes effect immediately.
+        """
         self._save()
+
+        if self._initial_tracker_config != self._snapshot_tracker_config():
+            self._restart_tracker()
+
+    def _snapshot_tracker_config(self) -> dict[str, Any]:
+        """Capture tracker-relevant config values for change detection."""
+        keys = [
+            "tracker_enabled", "tracker_type", "tracker_process",
+            "tracker_update_wait_s", "tracker_update_close",
+            "tracker_update_prompt", "tracker_not_found_prompt",
+            "tracker_ignore_not_next", "tracker_interval",
+            "plex_host", "plex_port", "plex_user", "plex_passwd",
+            "plex_ssl", "plex_obey_update_wait_s",
+            "jellyfin_host", "jellyfin_port", "jellyfin_user", "jellyfin_api_key",
+            "kodi_host", "kodi_port", "kodi_user", "kodi_passwd",
+            "kodi_obey_update_wait_s",
+        ]
+        return {k: self._get(k) for k in keys}
+
+    def _restart_tracker(self) -> None:
+        """Stop and re-create the tracker with current config."""
+        import threading
+
+        def worker() -> None:
+            try:
+                if self._engine.tracker:
+                    # Nullify signal callbacks before disabling so the dying
+                    # async loop can't emit stale events to the UI.
+                    for key in self._engine.tracker.signals:
+                        self._engine.tracker.signals[key] = None
+                    self._engine.tracker.disable()
+                    self._engine.tracker = None
+
+                if (
+                    self._engine.mediainfo.get("can_play")
+                    and self._engine.config.get("tracker_enabled")
+                ):
+                    TrackerClass = self._engine._get_tracker_class(
+                        self._engine.config["tracker_type"]
+                    )
+                    self._engine.tracker = TrackerClass(
+                        self._engine.msg,
+                        self._engine._get_tracker_list(),
+                        self._engine.config,
+                        self._engine.searchdirs,
+                        self._engine.redirections,
+                    )
+                    self._engine.tracker.connect_signal("detected", self._engine._tracker_detected)
+                    self._engine.tracker.connect_signal("removed", self._engine._tracker_removed)
+                    self._engine.tracker.connect_signal("playing", self._engine._tracker_playing)
+                    self._engine.tracker.connect_signal("update", self._engine._tracker_update)
+                    self._engine.tracker.connect_signal("unrecognised", self._engine._tracker_unrecognised)
+                    self._engine.tracker.connect_signal("state", self._engine._tracker_state)
+                    logger.info("Tracker restarted with new configuration")
+                    GLib.idle_add(
+                        self._engine._emit_signal,
+                        "tracker_state",
+                        self._engine.tracker.get_status(),
+                    )
+                else:
+                    logger.info("Tracker disabled")
+                    GLib.idle_add(self._engine._emit_signal, "tracker_state", {
+                        "state": None,
+                        "timer": None,
+                        "viewOffset": None,
+                        "paused": False,
+                        "show": None,
+                        "filename": None,
+                    })
+            except ImportError:
+                logger.warning("Couldn't import specified tracker: %s",
+                               self._engine.config.get("tracker_type"))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # -- Search directories management ----------------------------------------
 

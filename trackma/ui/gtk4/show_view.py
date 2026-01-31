@@ -32,6 +32,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
+from trackma.utils import Tracker as TrackerState
+
 if TYPE_CHECKING:
     from trackma.engine import Engine
 
@@ -259,6 +261,9 @@ class ShowListPage(Adw.NavigationPage):
         )
 
         toolbar.set_content(self._content_stack)
+
+        self._tracker_banner = Adw.Banner(title="Tracker: Listening", revealed=False)
+        toolbar.add_bottom_bar(self._tracker_banner)
 
         self.set_child(toolbar)
 
@@ -727,6 +732,14 @@ class ShowListPage(Adw.NavigationPage):
         self._engine.connect_signal("status_changed", self._on_status_changed)
         self._engine.connect_signal("show_added", self._on_show_added)
         self._engine.connect_signal("show_deleted", self._on_show_deleted)
+        self._engine.connect_signal("tracker_state", self._on_tracker_state)
+        self._engine.connect_signal("prompt_for_update", self._on_prompt_for_update)
+        self._engine.connect_signal("prompt_for_add", self._on_prompt_for_add)
+
+        # Set initial tracker state if tracker is already running
+        status = self._engine.tracker_status()
+        if status is not None:
+            self._handle_tracker_state(status)
 
     def _find_show_object(self, show_id: int) -> tuple[int, ShowObject] | None:
         """Find a ShowObject by id in the store.
@@ -793,6 +806,140 @@ class ShowListPage(Adw.NavigationPage):
         if self._remote_results:
             self._remote_dirty = True
         return GLib.SOURCE_REMOVE
+
+    # -- Tracker ---------------------------------------------------------------
+
+    def _on_tracker_state(self, status: dict[str, Any]) -> None:
+        """Engine callback for tracker state changes; marshals to main thread."""
+        logger.debug("tracker_state signal received: %s", status)
+        GLib.idle_add(self._handle_tracker_state, status)
+
+    def _handle_tracker_state(self, status: dict[str, Any]) -> bool:
+        """Update the tracker banner from a tracker status dict."""
+        state = status.get("state")
+        if state is None:
+            self._tracker_banner.set_revealed(False)
+            return GLib.SOURCE_REMOVE
+
+        show_tuple = status.get("show", (None, None))
+        timer = status.get("timer", 0)
+        paused = status.get("paused", False)
+
+        if state == TrackerState.NOVIDEO:
+            self._tracker_banner.set_title("Tracker: Listening")
+        elif state == TrackerState.PLAYING:
+            show, episode = show_tuple if show_tuple else (None, None)
+            title = show.get("title", "Unknown") if show else "Unknown"
+            minutes, seconds = divmod(timer, 60)
+            pause_indicator = " \u23f8" if paused else ""
+            prefix = "Paused" if paused else "Playing"
+            self._tracker_banner.set_title(
+                f"Tracker: {prefix} \u2014 {title} Ep. {episode} "
+                f"\u2014 {minutes}:{seconds:02d}{pause_indicator}"
+            )
+        elif state == TrackerState.UNRECOGNIZED:
+            self._tracker_banner.set_title("Tracker: Unrecognized file")
+        elif state == TrackerState.NOT_FOUND:
+            show, episode = show_tuple if show_tuple else (None, None)
+            title = show.get("title", "Unknown") if show else "Unknown"
+            self._tracker_banner.set_title(
+                f"Tracker: {title} not in list"
+            )
+        elif state == TrackerState.IGNORED:
+            show, episode = show_tuple if show_tuple else (None, None)
+            title = show.get("title", "Unknown") if show else "Unknown"
+            self._tracker_banner.set_title(
+                f"Tracker: Ignored \u2014 {title} Ep. {episode}"
+            )
+
+        self._tracker_banner.set_revealed(True)
+        return GLib.SOURCE_REMOVE
+
+    def _on_prompt_for_update(self, show: dict[str, Any], episode: int) -> None:
+        """Engine callback for tracker update prompt; marshals to main thread."""
+        logger.debug("prompt_for_update signal: %s ep %d", show.get("title"), episode)
+        GLib.idle_add(self._handle_prompt_for_update, show, episode)
+
+    def _handle_prompt_for_update(
+        self, show: dict[str, Any], episode: int,
+    ) -> bool:
+        """Show a dialog asking the user to confirm an episode update."""
+        title = show.get("title", "Unknown")
+        dialog = Adw.AlertDialog(
+            heading="Update progress?",
+            body=f"Update {title} to episode {episode}?",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("update", "Update")
+        dialog.set_response_appearance("update", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("update")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_update_dialog_response, show, episode)
+
+        window = self.get_root()
+        dialog.present(window)
+        return GLib.SOURCE_REMOVE
+
+    def _on_update_dialog_response(
+        self,
+        dialog: Adw.AlertDialog,
+        response: str,
+        show: dict[str, Any],
+        episode: int,
+    ) -> None:
+        """Handle the update prompt dialog response."""
+        if response == "update":
+            show_id = show.get("id", 0)
+
+            def do_update() -> None:
+                try:
+                    self._engine.set_episode(show_id, episode)
+                except Exception as e:
+                    GLib.idle_add(self._show_toast, f"Update failed: {e}")
+
+            threading.Thread(target=do_update, daemon=True).start()
+
+    def _on_prompt_for_add(self, show: dict[str, Any], episode: int) -> None:
+        """Engine callback for tracker add prompt; marshals to main thread."""
+        logger.debug("prompt_for_add signal: %s ep %d", show.get("title"), episode)
+        GLib.idle_add(self._handle_prompt_for_add, show, episode)
+
+    def _handle_prompt_for_add(
+        self, show: dict[str, Any], episode: int,
+    ) -> bool:
+        """Show a dialog asking the user to add a show to their list."""
+        title = show.get("title", "Unknown")
+        dialog = Adw.AlertDialog(
+            heading="Add show?",
+            body=f"Add {title} to your list?",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("add", "Add")
+        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("add")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_add_dialog_response, show)
+
+        window = self.get_root()
+        dialog.present(window)
+        return GLib.SOURCE_REMOVE
+
+    def _on_add_dialog_response(
+        self,
+        dialog: Adw.AlertDialog,
+        response: str,
+        show: dict[str, Any],
+    ) -> None:
+        """Handle the add prompt dialog response."""
+        if response == "add":
+
+            def do_add() -> None:
+                try:
+                    self._engine.add_show(show)
+                except Exception as e:
+                    GLib.idle_add(self._show_toast, f"Add failed: {e}")
+
+            threading.Thread(target=do_add, daemon=True).start()
 
     # -- Sync actions ----------------------------------------------------------
 
