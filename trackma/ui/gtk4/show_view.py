@@ -10,6 +10,10 @@ via a MenuButton in the header bar. The filter chain is:
           → Gtk.FilterListModel (search string)
             → Gtk.SingleSelection
 
+When the search bar is active and the query is ≥ 3 characters, a debounced
+remote search fires after 500 ms. Results appear in a second boxed-list
+section ("Online Results") below the local matches.
+
 All interaction with the Trackma core happens exclusively through
 Engine methods. Engine signals are marshaled to the main thread via
 GLib.idle_add.
@@ -116,10 +120,14 @@ class ShowListPage(Adw.NavigationPage):
         self._can_score: bool = self._mediainfo.get("can_score", False)
         self._sort_key: str = "title"
         self._sort_ascending: bool = True
+        self._remote_search_timeout_id: int = 0
+        self._remote_results: list[Any] = []
+        self._remote_dirty: bool = False
 
         self._build_ui()
         self._populate_store()
         self._connect_engine_signals()
+        self.connect("shown", self._on_page_shown)
 
     # -- UI construction -------------------------------------------------------
 
@@ -132,9 +140,8 @@ class ShowListPage(Adw.NavigationPage):
             ├── [top] AdwHeaderBar
             │   ├── [start] accounts_btn
             │   ├── [end] menu_btn (hamburger)
-            │   ├── [end] add_btn
-            │   ├── [end] filter_btn (status filter)
-            │   └── [end] search_btn
+            │   ├── [end] sort_btn
+            │   └── [end] search_btn (with status filter dropdown)
             ├── [top] GtkSearchBar
             └── [content] GtkStack (list | empty)
         """
@@ -152,13 +159,6 @@ class ShowListPage(Adw.NavigationPage):
         header.pack_start(accounts_btn)
 
         header.pack_end(self._build_menu_button())
-
-        add_btn = Gtk.Button(
-            icon_name="list-add-symbolic",
-            tooltip_text="Search & Add Show",
-        )
-        add_btn.connect("clicked", self._on_add_clicked)
-        header.pack_end(add_btn)
 
         self._sort_btn = Adw.SplitButton(
             icon_name="view-sort-descending-symbolic",
@@ -223,12 +223,27 @@ class ShowListPage(Adw.NavigationPage):
         clamp.set_margin_start(12)
         clamp.set_margin_end(12)
 
+        list_box_outer = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=24,
+        )
+
         self._list_group = Adw.PreferencesGroup()
         self._listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         self._listbox.add_css_class("boxed-list")
         self._listbox.connect("row-activated", self._on_row_activated)
         self._list_group.add(self._listbox)
-        clamp.set_child(self._list_group)
+        list_box_outer.append(self._list_group)
+
+        # Remote search results section (hidden by default)
+        self._remote_group = Adw.PreferencesGroup(title="Online Results")
+        self._remote_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self._remote_listbox.add_css_class("boxed-list")
+        self._remote_listbox.connect("row-activated", self._on_remote_row_activated)
+        self._remote_group.add(self._remote_listbox)
+        self._remote_group.set_visible(False)
+        list_box_outer.append(self._remote_group)
+
+        clamp.set_child(list_box_outer)
         scroll.set_child(clamp)
 
         self._empty_page = Adw.StatusPage(
@@ -341,12 +356,20 @@ class ShowListPage(Adw.NavigationPage):
         enabled = self._search_bar.get_search_mode()
         self._search_bar.set_search_mode(not enabled)
 
+    def _on_page_shown(self, _page: Adw.NavigationPage) -> None:
+        """Rebuild remote listbox if it was dirtied while off-screen."""
+        if self._remote_dirty:
+            self._remote_dirty = False
+            self._rebuild_remote_listbox()
+
     def _on_search_mode_changed(
         self, search_bar: Gtk.SearchBar, _pspec: GObject.ParamSpec,
     ) -> None:
-        """Focus the search entry when search mode is enabled."""
+        """Focus the search entry when search mode is enabled; clear remote on close."""
         if search_bar.get_search_mode():
             self._search_entry.grab_focus()
+        else:
+            self._clear_remote_results()
 
     def _setup_actions(self) -> None:
         """Register page-level actions."""
@@ -435,7 +458,8 @@ class ShowListPage(Adw.NavigationPage):
             if isinstance(show, ShowObject):
                 self._listbox.append(self._create_show_row(show))
 
-        if n == 0:
+        search_active = self._search_bar.get_search_mode()
+        if n == 0 and not search_active:
             self._content_stack.set_visible_child_name("empty")
         else:
             self._content_stack.set_visible_child_name("list")
@@ -502,26 +526,138 @@ class ShowListPage(Adw.NavigationPage):
     # -- Search ----------------------------------------------------------------
 
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
-        """Apply the search query to the shared string filter."""
+        """Apply local filter and schedule debounced remote search."""
         query = entry.get_text().strip()
         if query:
             self._string_filter.set_search(query)
         else:
             self._string_filter.set_search("")
 
-    # -- Add show --------------------------------------------------------------
+        # Cancel pending remote search
+        if self._remote_search_timeout_id:
+            GLib.source_remove(self._remote_search_timeout_id)
+            self._remote_search_timeout_id = 0
 
-    def _on_add_clicked(self, _button: Gtk.Button) -> None:
-        """Push a SearchPage onto the NavigationView."""
-        nav_view = self._find_nav_view()
-        if nav_view is None:
-            logger.warning("No AdwNavigationView found for search push")
+        if len(query) >= 3:
+            self._remote_search_timeout_id = GLib.timeout_add(
+                500, self._trigger_remote_search,
+            )
+        else:
+            self._clear_remote_results()
+
+    def _trigger_remote_search(self) -> bool:
+        """GLib timeout callback: launch remote search in background thread."""
+        self._remote_search_timeout_id = 0
+        query = self._search_entry.get_text().strip()
+        if len(query) < 3:
+            return GLib.SOURCE_REMOVE
+
+        # Show a "Searching..." placeholder
+        self._clear_remote_listbox()
+        spinner_row = Adw.ActionRow(title="Searching\u2026")
+        spinner = Gtk.Spinner(spinning=True, valign=Gtk.Align.CENTER)
+        spinner_row.add_prefix(spinner)
+        self._remote_listbox.append(spinner_row)
+        self._remote_group.set_visible(True)
+
+        thread = threading.Thread(
+            target=self._do_remote_search, args=(query,), daemon=True,
+        )
+        thread.start()
+        return GLib.SOURCE_REMOVE
+
+    def _do_remote_search(self, query: str) -> None:
+        """Execute engine.search() in a background thread."""
+        try:
+            results = self._engine.search(query)
+            GLib.idle_add(self._on_remote_search_complete, results)
+        except Exception as e:
+            GLib.idle_add(self._on_remote_search_error, str(e))
+
+    def _on_remote_search_complete(self, results: list[dict[str, Any]]) -> bool:
+        """Populate the remote listbox with search results."""
+        from trackma.ui.gtk4.search import SearchResultObject
+
+        self._remote_results = [
+            SearchResultObject(data=d) for d in results
+        ]
+        self._rebuild_remote_listbox()
+        return GLib.SOURCE_REMOVE
+
+    def _on_remote_search_error(self, message: str) -> bool:
+        """Hide remote section and show error toast."""
+        self._remote_group.set_visible(False)
+        self._show_toast(f"Search failed: {message}")
+        return GLib.SOURCE_REMOVE
+
+    def _rebuild_remote_listbox(self) -> None:
+        """Clear and repopulate the remote listbox, excluding local shows."""
+        self._clear_remote_listbox()
+
+        local_ids: set[int] = set()
+        for i in range(self._store.get_n_items()):
+            obj = self._store.get_item(i)
+            if isinstance(obj, ShowObject):
+                local_ids.add(obj.show_id)
+
+        visible_count = 0
+        for result in self._remote_results:
+            if result.get_data().get("id", 0) in local_ids:
+                continue
+            self._remote_listbox.append(self._create_remote_row(result))
+            visible_count += 1
+
+        self._remote_group.set_visible(visible_count > 0)
+
+    def _create_remote_row(self, result: Any) -> Adw.ActionRow:
+        """Create an ActionRow for a remote search result."""
+        row = Adw.ActionRow(
+            title=GLib.markup_escape_text(result.title),
+            subtitle=result.subtitle,
+            activatable=True,
+        )
+        row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+        row._result_obj = result  # type: ignore[attr-defined]
+        return row
+
+    def _clear_remote_listbox(self) -> None:
+        """Remove all rows from the remote listbox."""
+        while True:
+            row = self._remote_listbox.get_row_at_index(0)
+            if row is None:
+                break
+            self._remote_listbox.remove(row)
+
+    def _clear_remote_results(self) -> None:
+        """Hide remote group, clear results, cancel pending timeout."""
+        if self._remote_search_timeout_id:
+            GLib.source_remove(self._remote_search_timeout_id)
+            self._remote_search_timeout_id = 0
+        self._remote_results = []
+        self._remote_dirty = False
+        self._clear_remote_listbox()
+        self._remote_group.set_visible(False)
+
+    def _on_remote_row_activated(
+        self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow,
+    ) -> None:
+        """Push SearchDetailPage for the activated remote result."""
+        result = getattr(row, "_result_obj", None)
+        if result is None:
             return
 
-        from trackma.ui.gtk4.search import SearchPage
+        nav_view = self._find_nav_view()
+        if nav_view is None:
+            logger.warning("No AdwNavigationView found for detail push")
+            return
 
-        search_page = SearchPage(engine=self._engine)
-        nav_view.push(search_page)
+        from trackma.ui.gtk4.search import SearchDetailPage
+
+        detail_page = SearchDetailPage(
+            engine=self._engine,
+            show_data=result.get_data(),
+        )
+        nav_view.push(detail_page)
 
     # -- Row activation --------------------------------------------------------
 
@@ -612,8 +748,10 @@ class ShowListPage(Adw.NavigationPage):
         GLib.idle_add(self._handle_show_added, show)
 
     def _handle_show_added(self, show: dict[str, Any]) -> bool:
-        """Append a new show to the store."""
+        """Append a new show to the store and update remote results."""
         self._store.append(ShowObject.from_dict(show))
+        if self._remote_results:
+            self._remote_dirty = True
         return GLib.SOURCE_REMOVE
 
     def _on_show_deleted(self, show: dict[str, Any]) -> None:
@@ -621,11 +759,13 @@ class ShowListPage(Adw.NavigationPage):
         GLib.idle_add(self._handle_show_deleted, show)
 
     def _handle_show_deleted(self, show: dict[str, Any]) -> bool:
-        """Remove a show from the store."""
+        """Remove a show from the store and update remote results."""
         result = self._find_show_object(show.get("id", 0))
         if result is not None:
             pos, _obj = result
             self._store.remove(pos)
+        if self._remote_results:
+            self._remote_dirty = True
         return GLib.SOURCE_REMOVE
 
     # -- Sync actions ----------------------------------------------------------

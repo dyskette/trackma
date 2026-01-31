@@ -1,12 +1,9 @@
 """
-Trackma GTK4 Search Page.
+Trackma GTK4 Search Components.
 
-Provides a search interface for finding and adding shows from the remote
-API. Pushed onto the main NavigationView from the show list sidebar.
-
-The flow is: SearchPage (search + results list) → SearchDetailPage
-(show details + add button), following the GNOME Extensions Manager
-pattern.
+Provides ``SearchResultObject`` for wrapping remote search results and
+``SearchDetailPage`` for viewing details and adding a show to the user's
+list. Remote search is triggered from ``ShowListPage`` in ``show_view.py``.
 
 All interaction with the Trackma core happens exclusively through
 Engine methods.
@@ -25,7 +22,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, GLib, GObject, Gtk
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
@@ -92,307 +89,6 @@ class SearchResultObject(GObject.Object):
     def get_data(self) -> dict[str, Any]:
         """Return the underlying show dictionary."""
         return self._data
-
-
-class SearchPage(Adw.NavigationPage):
-    """Navigation page for searching and adding shows.
-
-    Args:
-        engine: Started Trackma Engine instance.
-        **kwargs: Forwarded to ``Adw.NavigationPage``.
-    """
-
-    __gtype_name__ = "TrackmaSearchPage"
-
-    def __init__(self, engine: Engine, **kwargs: Any) -> None:
-        super().__init__(title="Search", **kwargs)
-        self._engine = engine
-        self._mediainfo: dict[str, Any] = engine.mediainfo
-        self._results_store = Gio.ListStore(item_type=SearchResultObject)
-        self._sort_key: str = "title"
-        self._sort_ascending: bool = True
-        self._build_ui()
-
-    def _build_ui(self) -> None:
-        """Construct the widget tree."""
-        toolbar = Adw.ToolbarView()
-
-        # Header bar with page title
-        header = Adw.HeaderBar()
-
-        self._sort_btn = Adw.SplitButton(
-            icon_name="view-sort-descending-symbolic",
-            tooltip_text="Toggle sort direction",
-            menu_model=self._build_sort_menu(),
-        )
-        self._sort_btn.connect("clicked", self._on_sort_direction_clicked)
-        self._sort_btn.set_sensitive(False)
-        header.pack_end(self._sort_btn)
-
-        toolbar.add_top_bar(header)
-
-        # Search entry below header, clamped
-        self._search_entry = Gtk.SearchEntry(
-            placeholder_text="Search shows\u2026",
-            hexpand=True,
-        )
-        self._search_entry.connect("activate", self._on_search_activate)
-        search_clamp = Adw.Clamp(maximum_size=600, child=self._search_entry)
-        search_clamp.set_margin_start(12)
-        search_clamp.set_margin_end(12)
-        search_clamp.set_margin_top(6)
-        search_clamp.set_margin_bottom(6)
-        toolbar.add_top_bar(search_clamp)
-
-        # Sort model
-        self._sorter = Gtk.CustomSorter.new(self._sort_func)
-        self._sort_model = Gtk.SortListModel(
-            model=self._results_store, sorter=self._sorter,
-        )
-
-        # Content stack
-        self._stack = Gtk.Stack()
-
-        # Empty state
-        empty_page = Adw.StatusPage(
-            icon_name="edit-find-symbolic",
-            title="Search for Shows",
-            description="Type a title and press Enter",
-            vexpand=True,
-        )
-        self._stack.add_named(empty_page, "empty")
-
-        # Loading state
-        spinner = Gtk.Spinner(spinning=True, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
-        spinner.set_size_request(32, 32)
-        loading_page = Adw.StatusPage(
-            title="Searching\u2026",
-            vexpand=True,
-        )
-        loading_page.set_child(spinner)
-        self._stack.add_named(loading_page, "loading")
-
-        # Results as boxed list
-        scrolled = Gtk.ScrolledWindow(
-            hscrollbar_policy=Gtk.PolicyType.NEVER,
-            vexpand=True,
-        )
-        clamp = Adw.Clamp(maximum_size=600)
-        clamp.set_margin_top(24)
-        clamp.set_margin_bottom(24)
-        clamp.set_margin_start(12)
-        clamp.set_margin_end(12)
-
-        self._results_group = Adw.PreferencesGroup()
-        self._listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self._listbox.add_css_class("boxed-list")
-        self._listbox.connect("row-activated", self._on_row_activated)
-        self._results_group.add(self._listbox)
-        clamp.set_child(self._results_group)
-        scrolled.set_child(clamp)
-        self._stack.add_named(scrolled, "results")
-
-        # No results state
-        no_results_page = Adw.StatusPage(
-            icon_name="edit-find-symbolic",
-            title="No Results",
-            description="Try a different query",
-            vexpand=True,
-        )
-        self._stack.add_named(no_results_page, "no-results")
-
-        self._stack.set_visible_child_name("empty")
-        toolbar.set_content(self._stack)
-        self.set_child(toolbar)
-
-        self._setup_actions()
-
-    def _build_sort_menu(self) -> Gio.Menu:
-        """Build the sort-by dropdown menu."""
-        menu = Gio.Menu()
-        menu.append("Title", "search.sort-by::title")
-        menu.append("Score", "search.sort-by::score")
-        menu.append("Episodes", "search.sort-by::total")
-        menu.append("Type", "search.sort-by::show_type")
-        return menu
-
-    def _setup_actions(self) -> None:
-        """Register page-level actions."""
-        group = Gio.SimpleActionGroup()
-
-        sort_action = Gio.SimpleAction.new_stateful(
-            "sort-by",
-            GLib.VariantType.new("s"),
-            GLib.Variant.new_string("title"),
-        )
-        sort_action.connect("change-state", self._on_sort_by_changed)
-        group.add_action(sort_action)
-
-        self.insert_action_group("search", group)
-
-    # -- Sorting ---------------------------------------------------------------
-
-    def _sort_func(
-        self, a: SearchResultObject, b: SearchResultObject, _data: Any = None,
-    ) -> int:
-        """Compare two SearchResultObjects using the current sort key."""
-        if self._sort_key == "title":
-            va: Any = a.title.casefold()
-            vb: Any = b.title.casefold()
-        elif self._sort_key == "score":
-            va = a.score
-            vb = b.score
-        elif self._sort_key == "total":
-            va = a.total
-            vb = b.total
-        elif self._sort_key == "show_type":
-            va = a.show_type.casefold()
-            vb = b.show_type.casefold()
-        else:
-            va = a.title.casefold()
-            vb = b.title.casefold()
-
-        if va < vb:
-            result = -1
-        elif va > vb:
-            result = 1
-        else:
-            result = 0
-
-        return result if self._sort_ascending else -result
-
-    def _on_sort_direction_clicked(self, _button: Adw.SplitButton) -> None:
-        """Toggle sort direction and update icon."""
-        self._sort_ascending = not self._sort_ascending
-        self._sort_btn.set_icon_name(
-            "view-sort-ascending-symbolic"
-            if self._sort_ascending
-            else "view-sort-descending-symbolic"
-        )
-        self._sorter.changed(Gtk.SorterChange.DIFFERENT)
-        self._rebuild_listbox()
-
-    def _on_sort_by_changed(
-        self, action: Gio.SimpleAction, value: GLib.Variant,
-    ) -> None:
-        """Handle sort field selection from the dropdown menu."""
-        action.set_state(value)
-        self._sort_key = value.get_string()
-        self._sorter.changed(Gtk.SorterChange.DIFFERENT)
-        self._rebuild_listbox()
-
-    # -- Listbox ---------------------------------------------------------------
-
-    def _rebuild_listbox(self) -> None:
-        """Clear and repopulate the listbox from the sort model."""
-        while True:
-            row = self._listbox.get_row_at_index(0)
-            if row is None:
-                break
-            self._listbox.remove(row)
-
-        n = self._sort_model.get_n_items()
-        for i in range(n):
-            result = self._sort_model.get_item(i)
-            if isinstance(result, SearchResultObject):
-                self._listbox.append(self._create_result_row(result))
-
-    def _create_result_row(self, result: SearchResultObject) -> Adw.ActionRow:
-        """Create an ActionRow for a search result."""
-        row = Adw.ActionRow(
-            title=GLib.markup_escape_text(result.title),
-            subtitle=result.subtitle,
-            activatable=True,
-        )
-        row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
-        row._result_obj = result  # type: ignore[attr-defined]
-        return row
-
-    # -- Search ----------------------------------------------------------------
-
-    def _on_search_activate(self, entry: Gtk.SearchEntry) -> None:
-        """Run search when the user presses Enter."""
-        query = entry.get_text().strip()
-        if not query:
-            return
-
-        self._stack.set_visible_child_name("loading")
-        thread = threading.Thread(target=self._do_search, args=(query,), daemon=True)
-        thread.start()
-
-    def _do_search(self, query: str) -> None:
-        """Execute engine.search() in a background thread."""
-        try:
-            results = self._engine.search(query)
-            GLib.idle_add(self._on_search_complete, results)
-        except Exception as e:
-            GLib.idle_add(self._on_search_error, str(e))
-
-    def _on_search_complete(self, results: list[dict[str, Any]]) -> bool:
-        """Populate results store on the main thread."""
-        self._results_store.remove_all()
-        for show_data in results:
-            self._results_store.append(SearchResultObject(data=show_data))
-
-        if self._results_store.get_n_items() > 0:
-            self._sort_btn.set_sensitive(True)
-            self._stack.set_visible_child_name("results")
-            self._rebuild_listbox()
-        else:
-            self._sort_btn.set_sensitive(False)
-            self._stack.set_visible_child_name("no-results")
-        return GLib.SOURCE_REMOVE
-
-    def _on_search_error(self, message: str) -> bool:
-        """Show error toast and revert to previous state."""
-        self._stack.set_visible_child_name("empty")
-        self._show_toast(f"Search failed: {message}")
-        return GLib.SOURCE_REMOVE
-
-    # -- Result activation → push detail page ----------------------------------
-
-    def _on_row_activated(
-        self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow,
-    ) -> None:
-        """Push a detail page for the activated search result."""
-        result: SearchResultObject | None = getattr(row, "_result_obj", None)
-        if result is None:
-            return
-
-        nav_view = self._find_nav_view()
-        if nav_view is None:
-            logger.warning("No AdwNavigationView found for detail push")
-            return
-
-        detail_page = SearchDetailPage(
-            engine=self._engine,
-            show_data=result.get_data(),
-        )
-        nav_view.push(detail_page)
-
-    def _find_nav_view(self) -> Adw.NavigationView | None:
-        """Walk up the widget tree to find the nearest NavigationView."""
-        widget: Gtk.Widget | None = self.get_parent()
-        while widget is not None:
-            if isinstance(widget, Adw.NavigationView):
-                return widget
-            widget = widget.get_parent()
-        return None
-
-    # -- Utilities -------------------------------------------------------------
-
-    def _show_toast(self, message: str) -> bool:
-        """Show a toast via the nearest ToastOverlay ancestor."""
-        widget: Gtk.Widget | None = self
-        while widget is not None:
-            if isinstance(widget, Adw.ToastOverlay):
-                toast = Adw.Toast.new(message)
-                toast.set_timeout(3)
-                widget.add_toast(toast)
-                return GLib.SOURCE_REMOVE
-            widget = widget.get_parent()
-        logger.warning("No ToastOverlay found for message: %s", message)
-        return GLib.SOURCE_REMOVE
 
 
 def _clean_html(text: str) -> str:
@@ -732,7 +428,9 @@ class SearchDetailPage(Adw.NavigationPage):
 
     def _on_add_clicked(self, _button: Gtk.Button) -> None:
         """Collect field values and add the show in a background thread."""
-        self._add_btn.set_sensitive(False)
+        if getattr(self, "_adding", False):
+            return
+        self._adding = True
 
         # Collect all pending values from the UI
         values: dict[str, Any] = {}
@@ -837,16 +535,16 @@ class SearchDetailPage(Adw.NavigationPage):
             GLib.idle_add(self._on_add_error, str(e))
 
     def _on_add_success(self, title: str) -> bool:
-        """Handle successful add: toast and pop back to search."""
-        self._show_toast(f"Added: {title}")
+        """Handle successful add: pop back and show toast."""
         nav = self._find_nav_view()
         if nav is not None:
             nav.pop()
+        self._show_toast(f"Added: {title}")
         return GLib.SOURCE_REMOVE
 
     def _on_add_error(self, message: str) -> bool:
-        """Handle add failure: re-enable button and show error toast."""
-        self._add_btn.set_sensitive(True)
+        """Handle add failure: allow retry and show error toast."""
+        self._adding = False
         self._show_toast(f"Failed to add: {message}")
         return GLib.SOURCE_REMOVE
 
