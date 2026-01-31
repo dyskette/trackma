@@ -203,13 +203,10 @@ class ShowListPage(Adw.NavigationPage):
         self._sorter = Gtk.CustomSorter.new(self._sort_func)
         sort_model = Gtk.SortListModel(model=status_filter_model, sorter=self._sorter)
 
-        self._string_filter = Gtk.StringFilter(
-            expression=Gtk.PropertyExpression.new(ShowObject, None, "title"),
-            match_mode=Gtk.StringFilterMatchMode.SUBSTRING,
-            ignore_case=True,
-        )
+        self._search_query: str = ""
+        self._search_filter = Gtk.CustomFilter.new(self._search_filter_func)
         self._filter_model = Gtk.FilterListModel(
-            model=sort_model, filter=self._string_filter,
+            model=sort_model, filter=self._search_filter,
         )
 
         # List content
@@ -403,6 +400,30 @@ class ShowListPage(Adw.NavigationPage):
 
     # -- Status filter ---------------------------------------------------------
 
+    @staticmethod
+    def _fuzzy_match(text: str, query: str) -> bool:
+        """Check if all *query* chars appear in *text* in order (case-insensitive)."""
+        text_lower = text.lower()
+        idx = 0
+        for ch in query:
+            idx = text_lower.find(ch, idx)
+            if idx == -1:
+                return False
+            idx += 1
+        return True
+
+    def _search_filter_func(self, item: ShowObject) -> bool:
+        """Return True if *item* matches the current fuzzy search query."""
+        if not self._search_query:
+            return True
+        query = self._search_query.lower()
+        if self._fuzzy_match(item.title, query):
+            return True
+        for alias in item.get_data().get("aliases", []):
+            if self._fuzzy_match(alias, query):
+                return True
+        return False
+
     def _status_filter_func(self, item: ShowObject) -> bool:
         """Return True if *item* passes the current status filter."""
         if self._current_status is None:
@@ -463,6 +484,7 @@ class ShowListPage(Adw.NavigationPage):
             self._content_stack.set_visible_child_name("empty")
         else:
             self._content_stack.set_visible_child_name("list")
+            self._list_group.set_visible(n > 0 or not search_active)
 
     # -- Row construction ------------------------------------------------------
 
@@ -528,10 +550,8 @@ class ShowListPage(Adw.NavigationPage):
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
         """Apply local filter and schedule debounced remote search."""
         query = entry.get_text().strip()
-        if query:
-            self._string_filter.set_search(query)
-        else:
-            self._string_filter.set_search("")
+        self._search_query = query.lower() if query else ""
+        self._search_filter.changed(Gtk.FilterChange.DIFFERENT)
 
         # Cancel pending remote search
         if self._remote_search_timeout_id:
