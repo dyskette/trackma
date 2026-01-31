@@ -112,6 +112,10 @@ class ShowListPage(Adw.NavigationPage):
         self._mediainfo: dict[str, Any] = engine.mediainfo
         self._statuses: dict[str | int, str] = self._mediainfo["statuses_dict"]
         self._current_status: str | int | None = None
+        self._has_progress: bool = self._mediainfo.get("has_progress", True)
+        self._can_score: bool = self._mediainfo.get("can_score", False)
+        self._sort_key: str = "title"
+        self._sort_ascending: bool = True
 
         self._build_ui()
         self._populate_store()
@@ -156,6 +160,14 @@ class ShowListPage(Adw.NavigationPage):
         add_btn.connect("clicked", self._on_add_clicked)
         header.pack_end(add_btn)
 
+        self._sort_btn = Adw.SplitButton(
+            icon_name="view-sort-descending-symbolic",
+            tooltip_text="Toggle sort direction",
+            menu_model=self._build_sort_menu(),
+        )
+        self._sort_btn.connect("clicked", self._on_sort_direction_clicked)
+        header.pack_end(self._sort_btn)
+
         self._search_btn = Adw.SplitButton(
             icon_name="edit-find-symbolic",
             tooltip_text="Search",
@@ -188,10 +200,8 @@ class ShowListPage(Adw.NavigationPage):
             model=self._store, filter=self._status_filter,
         )
 
-        sorter = Gtk.StringSorter(
-            expression=Gtk.PropertyExpression.new(ShowObject, None, "title"),
-        )
-        sort_model = Gtk.SortListModel(model=status_filter_model, sorter=sorter)
+        self._sorter = Gtk.CustomSorter.new(self._sort_func)
+        sort_model = Gtk.SortListModel(model=status_filter_model, sorter=self._sorter)
 
         self._string_filter = Gtk.StringFilter(
             expression=Gtk.PropertyExpression.new(ShowObject, None, "title"),
@@ -272,6 +282,60 @@ class ShowListPage(Adw.NavigationPage):
             menu.append(status_name, f"page.filter-status::{status_num}")
         return menu
 
+    def _build_sort_menu(self) -> Gio.Menu:
+        """Build the sort-by menu model for the sort split button dropdown."""
+        menu = Gio.Menu()
+        menu.append("Title", "page.sort-by::title")
+        if self._has_progress:
+            menu.append("Progress", "page.sort-by::progress")
+        if self._can_score:
+            menu.append("Score", "page.sort-by::score")
+        return menu
+
+    def _sort_func(self, a: ShowObject, b: ShowObject, _data: Any = None) -> int:
+        """Compare two ShowObjects using the current sort key and direction."""
+        if self._sort_key == "title":
+            va = a.title.casefold()
+            vb = b.title.casefold()
+        elif self._sort_key == "progress":
+            va = a.progress
+            vb = b.progress
+        elif self._sort_key == "score":
+            va = a.score
+            vb = b.score
+        else:
+            va = a.title.casefold()
+            vb = b.title.casefold()
+
+        if va < vb:
+            result = -1
+        elif va > vb:
+            result = 1
+        else:
+            result = 0
+
+        return result if self._sort_ascending else -result
+
+    def _on_sort_direction_clicked(self, _button: Adw.SplitButton) -> None:
+        """Toggle sort direction and update icon."""
+        self._sort_ascending = not self._sort_ascending
+        self._sort_btn.set_icon_name(
+            "view-sort-ascending-symbolic"
+            if self._sort_ascending
+            else "view-sort-descending-symbolic"
+        )
+        self._sorter.changed(Gtk.SorterChange.DIFFERENT)
+        self._rebuild_listbox()
+
+    def _on_sort_by_changed(
+        self, action: Gio.SimpleAction, value: GLib.Variant,
+    ) -> None:
+        """Handle sort field selection from the dropdown menu."""
+        action.set_state(value)
+        self._sort_key = value.get_string()
+        self._sorter.changed(Gtk.SorterChange.DIFFERENT)
+        self._rebuild_listbox()
+
     def _on_search_btn_clicked(self, _button: Adw.SplitButton) -> None:
         """Toggle the search bar when the split button is clicked."""
         enabled = self._search_bar.get_search_mode()
@@ -303,6 +367,14 @@ class ShowListPage(Adw.NavigationPage):
         )
         filter_action.connect("change-state", self._on_filter_status_changed)
         group.add_action(filter_action)
+
+        sort_action = Gio.SimpleAction.new_stateful(
+            "sort-by",
+            GLib.VariantType.new("s"),
+            GLib.Variant.new_string("title"),
+        )
+        sort_action.connect("change-state", self._on_sort_by_changed)
+        group.add_action(sort_action)
 
         self.insert_action_group("page", group)
 
@@ -372,13 +444,15 @@ class ShowListPage(Adw.NavigationPage):
 
     def _format_subtitle(self, show: ShowObject) -> str:
         """Build subtitle text from progress and score."""
-        if show.total > 0:
-            parts = [f"{show.progress}/{show.total}"]
-        else:
-            parts = [f"{show.progress}/?"]
+        parts: list[str] = []
 
-        can_score = self._mediainfo.get("can_score", False)
-        if can_score and show.score > 0:
+        if self._has_progress:
+            if show.total > 0:
+                parts.append(f"{show.progress}/{show.total}")
+            else:
+                parts.append(f"{show.progress}/?")
+
+        if self._can_score and show.score > 0:
             score_step = self._mediainfo.get("score_step", 1)
             if isinstance(score_step, float) and score_step != int(score_step):
                 parts.append(f"\u2605 {show.score:.1f}")
