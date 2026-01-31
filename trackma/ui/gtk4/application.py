@@ -83,6 +83,7 @@ class TrackmaApplication(Adw.Application):
         """Register application-level actions and keyboard accelerators."""
         actions: list[tuple[str, Any, list[str] | None]] = [
             ("quit", lambda *_: self.quit(), ["<Control>q"]),
+            ("preferences", self._on_preferences, ["<Control>comma"]),
             ("about", self._on_about, None),
         ]
 
@@ -92,6 +93,15 @@ class TrackmaApplication(Adw.Application):
             self.add_action(action)
             if accels:
                 self.set_accels_for_action(f"app.{name}", accels)
+
+    def _on_preferences(self, _action: Gio.SimpleAction, _param: Any) -> None:
+        """Present the Preferences dialog."""
+        if self._engine is None:
+            return
+        from trackma.ui.gtk4.settings import SettingsDialog
+
+        dialog = SettingsDialog(engine=self._engine)
+        dialog.present(self._window)
 
     def _on_about(self, _action: Gio.SimpleAction, _param: Any) -> None:
         """Present the About dialog."""

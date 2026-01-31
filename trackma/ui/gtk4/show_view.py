@@ -275,11 +275,13 @@ class ShowListPage(Adw.NavigationPage):
         sync_section = Gio.Menu()
         sync_section.append("Download List", "page.download")
         sync_section.append("Upload Changes", "page.upload")
+        sync_section.append("Scan Library", "page.scan-library")
         menu.append_section(None, sync_section)
 
-        about_section = Gio.Menu()
-        about_section.append("About Trackma", "app.about")
-        menu.append_section(None, about_section)
+        app_section = Gio.Menu()
+        app_section.append("Preferences", "app.preferences")
+        app_section.append("About Trackma", "app.about")
+        menu.append_section(None, app_section)
 
         return Gtk.MenuButton(
             icon_name="open-menu-symbolic",
@@ -379,6 +381,10 @@ class ShowListPage(Adw.NavigationPage):
         upload_action = Gio.SimpleAction.new("upload", None)
         upload_action.connect("activate", self._on_upload)
         group.add_action(upload_action)
+
+        scan_action = Gio.SimpleAction.new("scan-library", None)
+        scan_action.connect("activate", self._on_scan_library)
+        group.add_action(scan_action)
 
         filter_action = Gio.SimpleAction.new_stateful(
             "filter-status",
@@ -798,6 +804,10 @@ class ShowListPage(Adw.NavigationPage):
         """Action handler for ``page.upload``."""
         self._run_in_thread(self._do_upload)
 
+    def _on_scan_library(self, _action: Gio.SimpleAction, _param: Any) -> None:
+        """Action handler for ``page.scan-library``."""
+        self._run_in_thread(self._do_scan_library)
+
     def _do_download(self) -> None:
         """Download the remote list in a background thread."""
         try:
@@ -811,6 +821,14 @@ class ShowListPage(Adw.NavigationPage):
         self._populate_store()
         self._show_toast("List downloaded")
         return GLib.SOURCE_REMOVE
+
+    def _do_scan_library(self) -> None:
+        """Scan the library in a background thread."""
+        try:
+            self._engine.scan_library()
+            GLib.idle_add(self._show_toast, "Library scan complete")
+        except Exception as e:
+            GLib.idle_add(self._show_toast, f"Library scan failed: {e}")
 
     def _do_upload(self) -> None:
         """Upload queued changes in a background thread."""
