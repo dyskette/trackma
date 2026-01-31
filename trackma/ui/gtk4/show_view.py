@@ -126,6 +126,8 @@ class ShowListPage(Adw.NavigationPage):
         self._remote_results: list[Any] = []
         self._remote_dirty: bool = False
 
+        self._prompt_active: bool = False
+
         self._build_ui()
         self._populate_store()
         self._connect_engine_signals()
@@ -864,6 +866,10 @@ class ShowListPage(Adw.NavigationPage):
         self, show: dict[str, Any], episode: int,
     ) -> bool:
         """Show a dialog asking the user to confirm an episode update."""
+        if self._prompt_active:
+            return GLib.SOURCE_REMOVE
+
+        self._prompt_active = True
         title = show.get("title", "Unknown")
         dialog = Adw.AlertDialog(
             heading="Update progress?",
@@ -888,6 +894,7 @@ class ShowListPage(Adw.NavigationPage):
         episode: int,
     ) -> None:
         """Handle the update prompt dialog response."""
+        self._prompt_active = False
         if response == "update":
             show_id = show.get("id", 0)
 
@@ -908,6 +915,10 @@ class ShowListPage(Adw.NavigationPage):
         self, show: dict[str, Any], episode: int,
     ) -> bool:
         """Show a dialog asking the user to add a show to their list."""
+        if self._prompt_active:
+            return GLib.SOURCE_REMOVE
+
+        self._prompt_active = True
         title = show.get("title", "Unknown")
         dialog = Adw.AlertDialog(
             heading="Add show?",
@@ -931,6 +942,7 @@ class ShowListPage(Adw.NavigationPage):
         show: dict[str, Any],
     ) -> None:
         """Handle the add prompt dialog response."""
+        self._prompt_active = False
         if response == "add":
 
             def do_add() -> None:
