@@ -25,7 +25,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from trackma.ui.gtk4.accounts import AccountPage
 from trackma.ui.gtk4.show_view import ShowListPage
@@ -146,7 +146,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._app._engine = engine
 
         list_page = ShowListPage(engine=engine)
-        list_page.connect("switch-account", lambda _p: self._on_switch_account(None))
+        list_page.connect("switch-account", lambda _page: self._on_switch_account(None))
         self._nav_view.replace([list_page])
         return GLib.SOURCE_REMOVE
 

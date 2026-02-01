@@ -159,7 +159,7 @@ class ShowListPage(Adw.NavigationPage):
             icon_name="system-users-symbolic",
             tooltip_text="Switch Account",
         )
-        accounts_btn.connect("clicked", lambda _b: self.emit("switch-account"))
+        accounts_btn.connect("clicked", lambda _button: self.emit("switch-account"))
         header.pack_start(accounts_btn)
 
         header.pack_end(self._build_menu_button())
@@ -695,7 +695,7 @@ class ShowListPage(Adw.NavigationPage):
     # -- Row activation --------------------------------------------------------
 
     def _on_row_activated(
-        self, listbox: Gtk.ListBox, row: Gtk.ListBoxRow,
+        self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow,
     ) -> None:
         """Open the detail page for the activated show."""
         show_obj: ShowObject | None = getattr(row, "_show_obj", None)
@@ -771,7 +771,7 @@ class ShowListPage(Adw.NavigationPage):
             obj.update_from_dict(show)
         return GLib.SOURCE_REMOVE
 
-    def _on_status_changed(self, show: dict[str, Any], old_status: str | int) -> None:
+    def _on_status_changed(self, show: dict[str, Any], _old_status: str | int) -> None:
         """Engine callback for status changes; marshals to main thread."""
         GLib.idle_add(self._handle_status_changed, show)
 
@@ -882,13 +882,13 @@ class ShowListPage(Adw.NavigationPage):
         dialog.set_close_response("cancel")
         dialog.connect("response", self._on_update_dialog_response, show, episode)
 
-        window = self.get_root()
-        dialog.present(window)
+        parent = self.get_root()
+        dialog.present(parent if isinstance(parent, Gtk.Widget) else None)
         return GLib.SOURCE_REMOVE
 
     def _on_update_dialog_response(
         self,
-        dialog: Adw.AlertDialog,
+        _dialog: Adw.AlertDialog,
         response: str,
         show: dict[str, Any],
         episode: int,
@@ -912,7 +912,7 @@ class ShowListPage(Adw.NavigationPage):
         GLib.idle_add(self._handle_prompt_for_add, show, episode)
 
     def _handle_prompt_for_add(
-        self, show: dict[str, Any], episode: int,
+        self, show: dict[str, Any], _episode: int,
     ) -> bool:
         """Show a dialog asking the user to add a show to their list."""
         if self._prompt_active:
@@ -931,13 +931,13 @@ class ShowListPage(Adw.NavigationPage):
         dialog.set_close_response("cancel")
         dialog.connect("response", self._on_add_dialog_response, show)
 
-        window = self.get_root()
-        dialog.present(window)
+        parent = self.get_root()
+        dialog.present(parent if isinstance(parent, Gtk.Widget) else None)
         return GLib.SOURCE_REMOVE
 
     def _on_add_dialog_response(
         self,
-        dialog: Adw.AlertDialog,
+        _dialog: Adw.AlertDialog,
         response: str,
         show: dict[str, Any],
     ) -> None:

@@ -465,7 +465,7 @@ class ShowDetailPage(Adw.NavigationPage):
         _button: Gtk.Button,
         row: Adw.ActionRow,
         popover: Gtk.Popover,
-        title: str,
+        _title: str,
     ) -> None:
         """Clear a date field."""
         popover.popdown()
@@ -507,7 +507,7 @@ class ShowDetailPage(Adw.NavigationPage):
         dialog.connect("response", self._on_delete_response)
         dialog.present(self._get_window())
 
-    def _on_delete_response(self, dialog: Adw.AlertDialog, response: str) -> None:
+    def _on_delete_response(self, _dialog: Adw.AlertDialog, response: str) -> None:
         """Handle the delete confirmation dialog response."""
         if response != "delete":
             return

@@ -17,7 +17,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk
 
 if TYPE_CHECKING:
     from trackma.engine import Engine
@@ -562,8 +562,9 @@ class SettingsDialog(Adw.PreferencesDialog):
     def _on_add_searchdir(self, _button: Gtk.Button) -> None:
         """Open a folder chooser to add a search directory."""
         dialog = Gtk.FileDialog(title="Select Search Directory")
+        parent = self.get_root()
         dialog.select_folder(
-            self.get_root(),
+            parent if isinstance(parent, Gtk.Window) else None,
             None,
             self._on_folder_selected,
         )
@@ -589,7 +590,7 @@ class SettingsDialog(Adw.PreferencesDialog):
 
     # -- Conditional visibility -----------------------------------------------
 
-    def _on_tracker_type_changed(self, row: Adw.ComboRow, _pspec: Any) -> None:
+    def _on_tracker_type_changed(self, _row: Adw.ComboRow, _pspec: Any) -> None:
         """Show/hide Plex/Jellyfin/Kodi groups based on tracker type."""
         self._update_tracker_group_visibility()
 
@@ -603,7 +604,7 @@ class SettingsDialog(Adw.PreferencesDialog):
         self._jellyfin_group.set_visible(tracker_type == "jellyfin")
         self._kodi_group.set_visible(tracker_type == "kodi")
 
-    def _on_autoretrieve_changed(self, row: Adw.ComboRow, _pspec: Any) -> None:
+    def _on_autoretrieve_changed(self, _row: Adw.ComboRow, _pspec: Any) -> None:
         """Show/hide days spin row based on autoretrieve strategy."""
         self._update_autoretrieve_visibility()
 
@@ -613,7 +614,7 @@ class SettingsDialog(Adw.PreferencesDialog):
         strategy = _AUTORETRIEVE_OPTIONS[selected] if 0 <= selected < len(_AUTORETRIEVE_OPTIONS) else "days"
         self._autoretrieve_days_row.set_visible(strategy == "days")
 
-    def _on_autosend_changed(self, row: Adw.ComboRow, _pspec: Any) -> None:
+    def _on_autosend_changed(self, _row: Adw.ComboRow, _pspec: Any) -> None:
         """Show/hide minutes/size spin rows based on autosend strategy."""
         self._update_autosend_visibility()
 
