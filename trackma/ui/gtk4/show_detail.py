@@ -16,6 +16,7 @@ import html
 import logging
 import os
 import re
+import subprocess
 import threading
 import urllib.request
 from typing import TYPE_CHECKING, Any
@@ -142,6 +143,7 @@ class ShowDetailPage(Adw.NavigationPage):
         box.set_margin_end(12)
 
         self._build_image(box)
+        self._build_actions_group(box)
         self._build_progress_group(box)
         self._build_dates_group(box)
         self._build_tags_group(box)
@@ -169,13 +171,8 @@ class ShowDetailPage(Adw.NavigationPage):
         parent.append(self._picture)
 
     def _build_menu_button(self) -> Gtk.MenuButton:
-        """Build the header bar menu with Delete and Open URL."""
+        """Build the header bar menu with Delete."""
         menu = Gio.Menu()
-
-        if self._show.get("url"):
-            url_section = Gio.Menu()
-            url_section.append("Open on Website", "detail.open-url")
-            menu.append_section(None, url_section)
 
         if self._mediainfo.get("can_delete", False):
             delete_section = Gio.Menu()
@@ -183,10 +180,6 @@ class ShowDetailPage(Adw.NavigationPage):
             menu.append_section(None, delete_section)
 
         group = Gio.SimpleActionGroup()
-
-        open_url = Gio.SimpleAction.new("open-url", None)
-        open_url.connect("activate", self._on_open_url)
-        group.add_action(open_url)
 
         delete = Gio.SimpleAction.new("delete", None)
         delete.connect("activate", self._on_delete)
@@ -198,6 +191,89 @@ class ShowDetailPage(Adw.NavigationPage):
             icon_name="view-more-symbolic",
             menu_model=menu,
         )
+
+    def _build_actions_group(self, parent: Gtk.Box) -> None:
+        """Build quick-action rows: Play, Open Folder, Open on Website."""
+        library = self._engine.library()
+        in_library = self._show_id in library
+
+        has_any = False
+        group = Adw.PreferencesGroup()
+
+        if in_library:
+            next_ep = self._show.get("my_progress", 0) + 1
+            total = self._show.get("total", 0)
+            if total > 0 and next_ep > total:
+                subtitle = "All episodes watched"
+                sensitive = False
+            else:
+                subtitle = f"Episode {next_ep}"
+                sensitive = True
+
+            play_row = Adw.ActionRow(
+                title="Play Next Episode",
+                subtitle=subtitle,
+                activatable=sensitive,
+            )
+            play_row.add_prefix(
+                Gtk.Image(icon_name="media-playback-start-symbolic")
+            )
+            if sensitive:
+                play_row.connect("activated", self._on_play_episode)
+            group.add(play_row)
+            has_any = True
+
+            folder_row = Adw.ActionRow(
+                title="Open Folder",
+                activatable=True,
+            )
+            folder_row.add_prefix(
+                Gtk.Image(icon_name="folder-open-symbolic")
+            )
+            folder_row.connect("activated", self._on_open_folder)
+            group.add(folder_row)
+            has_any = True
+
+        url = self._show.get("url", "")
+        if url:
+            website_row = Adw.ActionRow(
+                title="Open on Website",
+                activatable=True,
+            )
+            website_row.add_prefix(
+                Gtk.Image(icon_name="globe-symbolic")
+            )
+            website_row.connect("activated", self._on_open_url_row)
+            group.add(website_row)
+            has_any = True
+
+        if has_any:
+            parent.append(group)
+
+    def _on_play_episode(self, _row: Adw.ActionRow) -> None:
+        """Play the next unwatched episode."""
+        try:
+            args = self._engine.play_episode(self._show)
+            if args:
+                subprocess.Popen(args)
+            else:
+                self._show_toast("Episode not found in library")
+        except Exception as e:
+            self._show_toast(f"Play failed: {e}")
+
+    def _on_open_folder(self, _row: Adw.ActionRow) -> None:
+        """Open the show's folder in the file manager."""
+        try:
+            self._engine.open_show_folder(self._show_id)
+        except Exception as e:
+            self._show_toast(f"Open folder failed: {e}")
+
+    def _on_open_url_row(self, _row: Adw.ActionRow) -> None:
+        """Open the show's URL in the default browser."""
+        url = self._show.get("url", "")
+        if url:
+            launcher = Gtk.UriLauncher(uri=url)
+            launcher.launch(self._get_window(), None, None, None)
 
     def _build_progress_group(self, parent: Gtk.Box) -> None:
         """Build the Progress preferences group."""
@@ -485,13 +561,6 @@ class ShowDetailPage(Adw.NavigationPage):
             self._show_toast(f"Failed to set tags: {e}")
 
     # -- Menu actions ----------------------------------------------------------
-
-    def _on_open_url(self, _action: Gio.SimpleAction, _param: Any) -> None:
-        """Open the show's URL in the default browser."""
-        url = self._show.get("url", "")
-        if url:
-            launcher = Gtk.UriLauncher(uri=url)
-            launcher.launch(self._get_window(), None, None, None)
 
     def _on_delete(self, _action: Gio.SimpleAction, _param: Any) -> None:
         """Confirm and delete the show."""

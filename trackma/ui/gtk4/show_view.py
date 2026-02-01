@@ -22,6 +22,7 @@ GLib.idle_add.
 from __future__ import annotations
 
 import logging
+import subprocess
 import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -527,6 +528,17 @@ class ShowListPage(Adw.NavigationPage):
             subtitle=self._format_subtitle(show),
             activatable=True,
         )
+
+        if show.show_id in self._library_ids:
+            play_btn = Gtk.Button(
+                icon_name="media-playback-start-symbolic",
+                valign=Gtk.Align.CENTER,
+                tooltip_text="Play next episode",
+            )
+            play_btn.add_css_class("flat")
+            play_btn.connect("clicked", self._on_play_clicked, show)
+            row.add_suffix(play_btn)
+
         row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
         row._show_obj = show  # type: ignore[attr-defined]
 
@@ -535,6 +547,17 @@ class ShowListPage(Adw.NavigationPage):
         row._handler_id = handler_id  # type: ignore[attr-defined]
 
         return row
+
+    def _on_play_clicked(self, _button: Gtk.Button, show: ShowObject) -> None:
+        """Play next episode for a show from the list row."""
+        try:
+            args = self._engine.play_episode(show.get_data())
+            if args:
+                subprocess.Popen(args)
+            else:
+                self._show_toast("Episode not found in library")
+        except Exception as e:
+            self._show_toast(f"Play failed: {e}")
 
     def _on_show_prop_changed(
         self,
@@ -550,6 +573,10 @@ class ShowListPage(Adw.NavigationPage):
 
     def _populate_store(self) -> None:
         """Fill the store from the engine's full show list."""
+        try:
+            self._library_ids: set[int] = set(self._engine.library().keys())
+        except Exception:
+            self._library_ids = set()
         # Block the items-changed handler to avoid O(n²) rebuilds
         self._filter_model.handler_block(self._filter_signal_id)
         self._store.remove_all()
