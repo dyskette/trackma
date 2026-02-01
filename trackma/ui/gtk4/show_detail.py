@@ -25,7 +25,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, GLib, GObject, Gtk
 
 from trackma import utils
 
@@ -121,9 +121,15 @@ class ShowDetailPage(Adw.NavigationPage):
         """Construct the widget tree."""
         toolbar = Adw.ToolbarView()
 
-        # Header bar with menu
         header = Adw.HeaderBar()
-        header.pack_end(self._build_menu_button())
+        if self._mediainfo.get("can_delete", False):
+            delete_btn = Gtk.Button(
+                icon_name="user-trash-symbolic",
+                tooltip_text="Delete Show",
+            )
+            delete_btn.add_css_class("flat")
+            delete_btn.connect("clicked", lambda _: self._on_delete())
+            header.pack_end(delete_btn)
         toolbar.add_top_bar(header)
 
         # Scrollable content
@@ -169,28 +175,6 @@ class ShowDetailPage(Adw.NavigationPage):
         load_show_image(self._show, self._picture, api_info, mediatype)
 
         parent.append(self._picture)
-
-    def _build_menu_button(self) -> Gtk.MenuButton:
-        """Build the header bar menu with Delete."""
-        menu = Gio.Menu()
-
-        if self._mediainfo.get("can_delete", False):
-            delete_section = Gio.Menu()
-            delete_section.append("Delete Show", "detail.delete")
-            menu.append_section(None, delete_section)
-
-        group = Gio.SimpleActionGroup()
-
-        delete = Gio.SimpleAction.new("delete", None)
-        delete.connect("activate", self._on_delete)
-        group.add_action(delete)
-
-        self.insert_action_group("detail", group)
-
-        return Gtk.MenuButton(
-            icon_name="view-more-symbolic",
-            menu_model=menu,
-        )
 
     def _build_actions_group(self, parent: Gtk.Box) -> None:
         """Build quick-action rows: Play, Open Folder, Open on Website."""
@@ -560,9 +544,7 @@ class ShowDetailPage(Adw.NavigationPage):
         except Exception as e:
             self._show_toast(f"Failed to set tags: {e}")
 
-    # -- Menu actions ----------------------------------------------------------
-
-    def _on_delete(self, _action: Gio.SimpleAction, _param: Any) -> None:
+    def _on_delete(self) -> None:
         """Confirm and delete the show."""
         dialog = Adw.AlertDialog(
             heading="Delete Show?",
