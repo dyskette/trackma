@@ -1011,10 +1011,20 @@ class ShowListPage(Adw.NavigationPage):
     def _do_scan_library(self) -> None:
         """Scan the library in a background thread."""
         try:
-            self._engine.scan_library()
-            GLib.idle_add(self._show_toast, "Library scan complete")
+            self._engine.scan_library(rescan=True)
+            GLib.idle_add(self._on_scan_library_complete)
         except Exception as e:
             GLib.idle_add(self._show_toast, f"Library scan failed: {e}")
+
+    def _on_scan_library_complete(self) -> bool:
+        """Update library IDs and rebuild list after scan."""
+        try:
+            self._library_ids = set(self._engine.library().keys())
+        except Exception:
+            self._library_ids = set()
+        self._rebuild_listbox()
+        self._show_toast("Library scan complete")
+        return GLib.SOURCE_REMOVE
 
     def _do_upload(self) -> None:
         """Upload queued changes in a background thread."""
