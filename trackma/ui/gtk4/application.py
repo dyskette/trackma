@@ -12,13 +12,15 @@ on activation.
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from trackma.accounts import AccountManager
 from trackma.engine import Engine
@@ -57,6 +59,7 @@ class TrackmaApplication(Adw.Application):
         """Perform one-time initialization: actions, style, app name."""
         Adw.Application.do_startup(self)
 
+        self._register_icons()
         self._setup_actions()
 
         style_manager = Adw.StyleManager.get_default()
@@ -78,6 +81,13 @@ class TrackmaApplication(Adw.Application):
         if self._engine is not None:
             self._engine.unload()
         Adw.Application.do_shutdown(self)
+
+    def _register_icons(self) -> None:
+        """Add bundled icons to the default icon theme search path."""
+        icons_dir = Path(__file__).parent / "data" / "icons"
+        if icons_dir.is_dir():
+            icon_theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+            icon_theme.add_search_path(str(icons_dir))
 
     def _setup_actions(self) -> None:
         """Register application-level actions and keyboard accelerators."""

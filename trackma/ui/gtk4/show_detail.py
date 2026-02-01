@@ -222,10 +222,14 @@ class ShowDetailPage(Adw.NavigationPage):
         if url:
             website_row = Adw.ActionRow(
                 title="Open on Website",
+                subtitle=url,
                 activatable=True,
             )
             website_row.add_prefix(
-                Gtk.Image(icon_name="globe-symbolic")
+                Gtk.Image(icon_name="user-home-symbolic")
+            )
+            website_row.add_suffix(
+                Gtk.Image(icon_name="external-link-symbolic")
             )
             website_row.connect("activated", self._on_open_url_row)
             group.add(website_row)

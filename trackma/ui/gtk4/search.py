@@ -173,6 +173,7 @@ class SearchDetailPage(Adw.NavigationPage):
         box.set_margin_end(12)
 
         self._build_image(box)
+        self._build_actions_group(box)
         self._build_progress_group(box)
         self._build_dates_group(box)
         self._build_tags_group(box)
@@ -198,6 +199,39 @@ class SearchDetailPage(Adw.NavigationPage):
         load_show_image(self._show, self._picture, api_info, mediatype)
 
         parent.append(self._picture)
+
+    def _build_actions_group(self, parent: Gtk.Box) -> None:
+        """Build Open on Website action row if show has a URL."""
+        url = self._show.get("url", "")
+        if not url:
+            return
+
+        group = Adw.PreferencesGroup()
+        website_row = Adw.ActionRow(
+            title="Open on Website",
+            subtitle=url,
+            activatable=True,
+        )
+        website_row.add_prefix(
+            Gtk.Image(icon_name="user-home-symbolic")
+        )
+        website_row.add_suffix(
+            Gtk.Image(icon_name="external-link-symbolic")
+        )
+        website_row.connect("activated", self._on_open_url)
+        group.add(website_row)
+        parent.append(group)
+
+    def _on_open_url(self, _row: Adw.ActionRow) -> None:
+        """Open the show's URL in the default browser."""
+        url = self._show.get("url", "")
+        if url:
+            launcher = Gtk.UriLauncher(uri=url)
+            window = self.get_root()
+            launcher.launch(
+                window if isinstance(window, Gtk.Window) else None,
+                None, None, None,
+            )
 
     # -- Editable field groups (mirror ShowDetailPage) --------------------------
 
