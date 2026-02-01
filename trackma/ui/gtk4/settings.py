@@ -113,7 +113,7 @@ class SettingsDialog(Adw.PreferencesDialog):
 
         self._scan_whole_row = Adw.SwitchRow(
             title="Scan whole list",
-            subtitle="Scan all statuses, not just currently watching",
+            subtitle="Also match files for Completed and Dropped shows",
         )
         library_group.add(self._scan_whole_row)
 
