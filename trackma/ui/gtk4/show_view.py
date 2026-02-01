@@ -265,6 +265,11 @@ class ShowListPage(Adw.NavigationPage):
 
         toolbar.set_content(self._content_stack)
 
+        self._progress_bar = Gtk.ProgressBar()
+        self._progress_bar.add_css_class("osd")
+        self._progress_bar.set_visible(False)
+        toolbar.add_top_bar(self._progress_bar)
+
         self._tracker_banner = Adw.Banner(title="Tracker: Listening", revealed=False)
         toolbar.add_bottom_bar(self._tracker_banner)
 
@@ -390,9 +395,9 @@ class ShowListPage(Adw.NavigationPage):
         upload_action.connect("activate", self._on_upload)
         group.add_action(upload_action)
 
-        scan_action = Gio.SimpleAction.new("scan-library", None)
-        scan_action.connect("activate", self._on_scan_library)
-        group.add_action(scan_action)
+        self._scan_action = Gio.SimpleAction.new("scan-library", None)
+        self._scan_action.connect("activate", self._on_scan_library)
+        group.add_action(self._scan_action)
 
         filter_action = Gio.SimpleAction.new_stateful(
             "filter-status",
@@ -984,14 +989,24 @@ class ShowListPage(Adw.NavigationPage):
 
     def _on_download(self, _action: Gio.SimpleAction, _param: Any) -> None:
         """Action handler for ``page.download``."""
+        self._tracker_banner.set_title("Downloading list\u2026")
+        self._tracker_banner.set_revealed(True)
+        self._start_progress()
         self._run_in_thread(self._do_download)
 
     def _on_upload(self, _action: Gio.SimpleAction, _param: Any) -> None:
         """Action handler for ``page.upload``."""
+        self._tracker_banner.set_title("Uploading changes\u2026")
+        self._tracker_banner.set_revealed(True)
+        self._start_progress()
         self._run_in_thread(self._do_upload)
 
     def _on_scan_library(self, _action: Gio.SimpleAction, _param: Any) -> None:
         """Action handler for ``page.scan-library``."""
+        self._tracker_banner.set_title("Scanning library\u2026")
+        self._tracker_banner.set_revealed(True)
+        self._start_progress()
+        self._scan_action.set_enabled(False)
         self._run_in_thread(self._do_scan_library)
 
     def _do_download(self) -> None:
@@ -1000,11 +1015,12 @@ class ShowListPage(Adw.NavigationPage):
             self._engine.list_download()
             GLib.idle_add(self._on_download_complete)
         except Exception as e:
-            GLib.idle_add(self._show_toast, f"Download failed: {e}")
+            GLib.idle_add(self._on_sync_failed, f"Download failed: {e}")
 
     def _on_download_complete(self) -> bool:
         """Repopulate the store after a successful download."""
         self._populate_store()
+        self._restore_tracker_banner()
         self._show_toast("List downloaded")
         return GLib.SOURCE_REMOVE
 
@@ -1014,7 +1030,7 @@ class ShowListPage(Adw.NavigationPage):
             self._engine.scan_library(rescan=True)
             GLib.idle_add(self._on_scan_library_complete)
         except Exception as e:
-            GLib.idle_add(self._show_toast, f"Library scan failed: {e}")
+            GLib.idle_add(self._on_scan_library_failed, str(e))
 
     def _on_scan_library_complete(self) -> bool:
         """Update library IDs and rebuild list after scan."""
@@ -1023,16 +1039,66 @@ class ShowListPage(Adw.NavigationPage):
         except Exception:
             self._library_ids = set()
         self._rebuild_listbox()
+        self._restore_scan_library_action()
         self._show_toast("Library scan complete")
         return GLib.SOURCE_REMOVE
+
+    def _on_scan_library_failed(self, message: str) -> bool:
+        """Re-enable scan action and show error after failed scan."""
+        self._restore_scan_library_action()
+        self._show_toast(f"Library scan failed: {message}")
+        return GLib.SOURCE_REMOVE
+
+    def _restore_scan_library_action(self) -> None:
+        """Re-enable the scan-library action and restore tracker banner."""
+        self._scan_action.set_enabled(True)
+        self._restore_tracker_banner()
 
     def _do_upload(self) -> None:
         """Upload queued changes in a background thread."""
         try:
             self._engine.list_upload()
-            GLib.idle_add(self._show_toast, "Changes uploaded")
+            GLib.idle_add(self._on_upload_complete)
         except Exception as e:
-            GLib.idle_add(self._show_toast, f"Upload failed: {e}")
+            GLib.idle_add(self._on_sync_failed, f"Upload failed: {e}")
+
+    def _on_upload_complete(self) -> bool:
+        """Restore banner and show toast after upload."""
+        self._restore_tracker_banner()
+        self._show_toast("Changes uploaded")
+        return GLib.SOURCE_REMOVE
+
+    def _on_sync_failed(self, message: str) -> bool:
+        """Restore banner and show error toast."""
+        self._restore_tracker_banner()
+        self._show_toast(message)
+        return GLib.SOURCE_REMOVE
+
+    def _start_progress(self) -> None:
+        """Show and pulse the progress bar."""
+        self._progress_bar.set_visible(True)
+        self._progress_pulse_id = GLib.timeout_add(200, self._pulse_progress)
+
+    def _pulse_progress(self) -> bool:
+        """GLib timeout callback to pulse the progress bar."""
+        self._progress_bar.pulse()
+        return GLib.SOURCE_CONTINUE
+
+    def _stop_progress(self) -> None:
+        """Hide the progress bar and stop pulsing."""
+        if hasattr(self, "_progress_pulse_id") and self._progress_pulse_id:
+            GLib.source_remove(self._progress_pulse_id)
+            self._progress_pulse_id = 0
+        self._progress_bar.set_visible(False)
+
+    def _restore_tracker_banner(self) -> None:
+        """Restore the tracker banner to current tracker state."""
+        self._stop_progress()
+        status = self._engine.tracker_status()
+        if status is not None:
+            self._handle_tracker_state(status)
+        else:
+            self._tracker_banner.set_revealed(False)
 
     def _run_in_thread(self, target: Callable[[], None]) -> None:
         """Run *target* on a daemon thread."""
